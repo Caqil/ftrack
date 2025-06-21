@@ -198,7 +198,7 @@ func (lw *LocationWorker) Stop() error {
 
 func (lw *LocationWorker) SubmitLocation(userID string, location models.Location) error {
 	if !lw.isRunning {
-		return utils.NewServiceError("Location worker is not running")
+		return utils.NewServiceError("Location worker is not running", "ERR_WORKER_NOT_RUNNING")
 	}
 
 	job := LocationJob{
@@ -219,7 +219,7 @@ func (lw *LocationWorker) SubmitLocation(userID string, location models.Location
 	case lw.locationQueue <- job:
 		return nil
 	default:
-		return utils.NewServiceError("Location queue is full")
+		return utils.NewServiceError("Location queue is full", "ERR_QUEUE_FULL")
 	}
 }
 

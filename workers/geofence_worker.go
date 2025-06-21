@@ -205,7 +205,7 @@ func (gw *GeofenceWorker) Stop() error {
 
 func (gw *GeofenceWorker) SubmitLocationUpdate(userID string, previousLocation *models.Location, currentLocation models.Location) error {
 	if !gw.isRunning {
-		return utils.NewServiceError("Geofence worker is not running")
+		return utils.NewServiceError("Geofence worker is not running", "GEOFENCE_WORKER_NOT_RUNNING")
 	}
 
 	job := GeofenceJob{
@@ -227,7 +227,7 @@ func (gw *GeofenceWorker) SubmitLocationUpdate(userID string, previousLocation *
 	case gw.geofenceQueue <- job:
 		return nil
 	default:
-		return utils.NewServiceError("Geofence queue is full")
+		return utils.NewServiceError("Geofence queue is full", "GEOFENCE_QUEUE_FULL")
 	}
 }
 

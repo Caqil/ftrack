@@ -169,7 +169,7 @@ func (nw *NotificationWorker) Stop() error {
 
 func (nw *NotificationWorker) SubmitNotification(notification models.Notification, user models.User) error {
 	if !nw.isRunning {
-		return utils.NewServiceError("Notification worker is not running")
+		return utils.NewServiceError("Notification worker is not running", "ERR_WORKER_NOT_RUNNING")
 	}
 
 	job := NotificationJob{
@@ -185,7 +185,7 @@ func (nw *NotificationWorker) SubmitNotification(notification models.Notificatio
 	case nw.notificationQueue <- job:
 		return nil
 	default:
-		return utils.NewServiceError("Notification queue is full")
+		return utils.NewServiceError("Notification queue is full", "ERR_QUEUE_FULL")
 	}
 }
 

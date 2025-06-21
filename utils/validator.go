@@ -18,6 +18,29 @@ type ValidationError struct {
 	Tag     string `json:"tag"`
 	Value   string `json:"value"`
 	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
+}
+
+func (e ValidationError) Error() string {
+	if e.Field != "" {
+		return fmt.Sprintf("%s: %s", e.Field, e.Message)
+	}
+	return e.Message
+}
+func NewValidationError(message string) error {
+	return ValidationError{
+		Message: message,
+		Code:    "VALIDATION_ERROR",
+	}
+}
+
+// NewFieldValidationError creates a validation error for a specific field
+func NewFieldValidationError(field, message string) error {
+	return ValidationError{
+		Message: message,
+		Field:   field,
+		Code:    "FIELD_VALIDATION_ERROR",
+	}
 }
 
 func NewValidationService() *ValidationService {

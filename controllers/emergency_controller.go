@@ -269,7 +269,7 @@ func (ec *EmergencyController) ResolveEmergency(c *gin.Context) {
 	}
 	c.ShouldBindJSON(&req)
 
-	emergency, err := ec.emergencyService.ResolveEmergency(c.Request.Context(), userID, emergencyID, req.Resolution)
+	err := ec.emergencyService.ResolveEmergency(c.Request.Context(), userID, emergencyID, req.Resolution)
 	if err != nil {
 		logrus.Errorf("Resolve emergency failed: %v", err)
 
@@ -286,7 +286,7 @@ func (ec *EmergencyController) ResolveEmergency(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, "Emergency resolved successfully", emergency)
+	utils.SuccessResponse(c, "Emergency resolved successfully", nil)
 }
 
 // DismissEmergency dismisses a false alarm

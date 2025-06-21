@@ -5,21 +5,23 @@ import (
 	"ftrack/models"
 	"ftrack/repositories"
 	"ftrack/utils"
-	"ftrack/websocket"
 
 	"github.com/sirupsen/logrus"
 )
 
+type WebSocketHub interface {
+	BroadcastPlaceEvent(userID string, circleIDs []string, placeEvent models.WSPlaceEvent)
+}
 type GeofenceService struct {
 	placeRepo    *repositories.PlaceRepository
 	locationRepo *repositories.LocationRepository
-	websocketHub *websocket.Hub
+	websocketHub WebSocketHub // Use interface instead of concrete type
 }
 
 func NewGeofenceService(
 	placeRepo *repositories.PlaceRepository,
 	locationRepo *repositories.LocationRepository,
-	websocketHub *websocket.Hub,
+	websocketHub WebSocketHub, // Use interface
 ) *GeofenceService {
 	return &GeofenceService{
 		placeRepo:    placeRepo,

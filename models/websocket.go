@@ -138,6 +138,12 @@ type WSLocationRequest struct {
 	BatteryLevel int     `json:"batteryLevel,omitempty"`
 	IsCharging   bool    `json:"isCharging,omitempty"`
 	IsDriving    bool    `json:"isDriving,omitempty"`
+	IsMoving     bool    `json:"isMoving,omitempty"`
+	MovementType string  `json:"movementType,omitempty"`
+	NetworkType  string  `json:"networkType,omitempty"`
+	Source       string  `json:"source,omitempty"`
+	DeviceTime   string  `json:"deviceTime,omitempty"` // RFC3339 format
+	Timezone     string  `json:"timezone,omitempty"`
 }
 
 type WSMessageRequest struct {

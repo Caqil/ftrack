@@ -302,7 +302,7 @@ func (es *EmergencyService) notifyEmergencyContacts(ctx context.Context, emergen
 		}
 
 		// Send SMS (would integrate with actual SMS service)
-		logrus.Info("Sending emergency SMS to: ", user.EmergencyContact.Phone)
+		logrus.Info("Sending emergency SMS to: ", user.EmergencyContact.Phone, " with message: ", sms.Message)
 	}
 
 	// Notify circle members
@@ -355,4 +355,105 @@ func (es *EmergencyService) broadcastEmergencyAlert(userID string, emergency *mo
 	if len(circleIDs) > 0 {
 		es.websocketHub.BroadcastEmergencyAlert(circleIDs, alert)
 	}
+}
+
+// DismissEmergency dismisses an emergency as false alarm
+func (es *EmergencyService) DismissEmergency(ctx context.Context, userID, emergencyID, reason string) (*models.Emergency, error) {
+	emergency, err := es.emergencyRepo.GetByID(ctx, emergencyID)
+	if err != nil {
+		if err.Error() == "not found" {
+			return nil, errors.New("emergency not found")
+		}
+		return nil, err
+	}
+
+	// Check permission logic...
+	hasPermission := emergency.UserID.Hex() == userID
+	if !hasPermission && !emergency.CircleID.IsZero() {
+		isMember, err := es.circleRepo.IsMember(ctx, emergency.CircleID.Hex(), userID)
+		if err == nil && isMember {
+			hasPermission = true
+		}
+	}
+
+	if !hasPermission {
+		return nil, errors.New("access denied")
+	}
+
+	if emergency.Status == "dismissed" {
+		return nil, errors.New("emergency already dismissed")
+	}
+
+	// Create update fields
+	updateFields := bson.M{
+		"status":          "dismissed",
+		"dismissalReason": reason,
+		"dismissedAt":     time.Now(),
+		"dismissedBy":     userID,
+	}
+
+	err = es.emergencyRepo.Update(ctx, emergencyID, updateFields)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return updated emergency
+	return es.emergencyRepo.GetByID(ctx, emergencyID)
+}
+
+// CancelEmergency cancels an active emergency
+func (es *EmergencyService) CancelEmergency(ctx context.Context, userID, emergencyID, reason string) (*models.Emergency, error) {
+	emergency, err := es.emergencyRepo.GetByID(ctx, emergencyID)
+	if err != nil {
+		if err.Error() == "not found" {
+			return nil, errors.New("emergency not found")
+		}
+		return nil, err
+	}
+
+	// Only the emergency creator can cancel
+	if emergency.UserID.Hex() != userID {
+		return nil, errors.New("access denied")
+	}
+
+	if emergency.Status == "cancelled" {
+		return nil, errors.New("emergency already cancelled")
+	}
+
+	// Update emergency status
+	updateFields := bson.M{
+		"status":          "dismissed",
+		"dismissalReason": reason,
+		"dismissedAt":     time.Now(),
+		"dismissedBy":     userID,
+	}
+
+	err = es.emergencyRepo.Update(ctx, emergencyID, updateFields)
+	if err != nil {
+		return nil, err
+	}
+
+	return emergency, nil
+}
+
+// GetActiveEmergencies gets all active emergencies with optional priority filter (admin only)
+func (es *EmergencyService) GetActiveEmergencies(ctx context.Context, priority string) ([]models.Emergency, error) {
+	// Get all active emergencies from repository
+	emergencies, err := es.emergencyRepo.GetActiveEmergencies(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by priority if specified
+	if priority != "" {
+		var filtered []models.Emergency
+		for _, emergency := range emergencies {
+			if emergency.Priority == priority {
+				filtered = append(filtered, emergency)
+			}
+		}
+		return filtered, nil
+	}
+
+	return emergencies, nil
 }

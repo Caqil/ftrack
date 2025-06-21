@@ -582,3 +582,15 @@ func (h *Hub) Shutdown() {
 
 	logrus.Info("WebSocket Hub shutdown complete")
 }
+func (h *Hub) BroadcastMessage(roomID string, message models.WSMessage) {
+	broadcastMsg := BroadcastMessage{
+		RoomID:  roomID,
+		Message: message,
+	}
+
+	select {
+	case h.broadcast <- broadcastMsg:
+	default:
+		logrus.Warn("Broadcast channel full, dropping message")
+	}
+}

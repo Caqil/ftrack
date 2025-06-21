@@ -224,3 +224,45 @@ func (ur *UserRepository) UpdateDeviceToken(ctx context.Context, userID, deviceT
 
 	return err
 }
+
+// GetByResetToken gets user by password reset token
+func (ur *UserRepository) GetByResetToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+
+	// Check if token exists and is not expired
+	filter := bson.M{
+		"resetToken":        token,
+		"resetTokenExpires": bson.M{"$gt": time.Now()}, // Token not expired
+	}
+
+	err := ur.collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("invalid or expired token")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// GetByVerificationToken gets user by email verification token
+func (ur *UserRepository) GetByVerificationToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+
+	// Check if token exists and is not expired
+	filter := bson.M{
+		"verificationToken":        token,
+		"verificationTokenExpires": bson.M{"$gt": time.Now()}, // Token not expired
+	}
+
+	err := ur.collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("invalid or expired token")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}

@@ -36,13 +36,17 @@ type Emergency struct {
 	// Timeline
 	Timeline []EmergencyEvent `json:"timeline" bson:"timeline"`
 
-	// Resolution
-	ResolvedBy primitive.ObjectID `json:"resolvedBy,omitempty" bson:"resolvedBy,omitempty"`
-	ResolvedAt time.Time          `json:"resolvedAt,omitempty" bson:"resolvedAt,omitempty"`
-	Resolution string             `json:"resolution,omitempty" bson:"resolution,omitempty"`
 
-	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
+	CreatedAt          time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt" bson:"updatedAt"`
+	Resolution         string    `bson:"resolution,omitempty" json:"resolution,omitempty"`
+	ResolvedAt         time.Time `bson:"resolvedAt,omitempty" json:"resolvedAt,omitempty"`
+	ResolvedBy         string    `bson:"resolvedBy,omitempty" json:"resolvedBy,omitempty"`
+	DismissalReason    string    `bson:"dismissalReason,omitempty" json:"dismissalReason,omitempty"`
+	DismissedAt        time.Time `bson:"dismissedAt,omitempty" json:"dismissedAt,omitempty"`
+	DismissedBy        string    `bson:"dismissedBy,omitempty" json:"dismissedBy,omitempty"`
+	CancellationReason string    `bson:"cancellationReason,omitempty" json:"cancellationReason,omitempty"`
+	CancelledAt        time.Time `bson:"cancelledAt,omitempty" json:"cancelledAt,omitempty"`
 }
 
 type EmergencyLocation struct {

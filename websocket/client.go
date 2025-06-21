@@ -63,7 +63,6 @@ type Client struct {
 	// Hub reference
 	hub *Hub
 
-	// Rate limiting
 	rateLimiter  *utils.RateLimiter
 	requestCount int
 	windowStart  time.Time
@@ -96,8 +95,7 @@ func NewClient(conn *websocket.Conn, hub *Hub, r *http.Request) *Client {
 		ipAddress:     getClientIP(r),
 		userAgent:     r.UserAgent(),
 		subscriptions: make(map[string]bool),
-		filters:       make(map[string]interface{}),
-		isActive:      true,
+		filters:       make(map[string]interface{}),           // 100 requests per minute
 		rateLimiter:   utils.NewRateLimiter(100, time.Minute), // 100 requests per minute
 		ctx:           ctx,
 		cancel:        cancel,
