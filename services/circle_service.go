@@ -3,18 +3,25 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"ftrack/config"
 	"ftrack/models"
 	"ftrack/repositories"
 	"ftrack/utils"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type CircleService struct {
-	circleRepo *repositories.CircleRepository
-	userRepo   *repositories.UserRepository
-	validator  *utils.ValidationService
+	circleRepo     *repositories.CircleRepository
+	userRepo       *repositories.UserRepository
+	invitationRepo *repositories.CircleInvitationRepository // Add this
+	emailService   EmailService                             // Add this
+	validator      *utils.ValidationService
+	config         *config.Config // Add this
 }
 
 func NewCircleService(circleRepo *repositories.CircleRepository, userRepo *repositories.UserRepository) *CircleService {
@@ -330,4 +337,206 @@ func (cs *CircleService) DeleteCircle(ctx context.Context, userID, circleID stri
 
 func (cs *CircleService) UpdateLastActivity(ctx context.Context, circleID, userID string) error {
 	return cs.circleRepo.UpdateLastActivity(ctx, circleID, userID)
+}
+
+// GetCircle gets a specific circle by ID with permission check
+func (cs *CircleService) GetCircle(ctx context.Context, userID, circleID string) (*models.Circle, error) {
+	// Check if user is a member of the circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isMember {
+		return nil, errors.New("access denied")
+	}
+
+	// Get circle
+	circle, err := cs.circleRepo.GetByID(ctx, circleID)
+	if err != nil {
+		return nil, errors.New("circle not found")
+	}
+
+	return circle, nil
+}
+
+// AcceptInvitation accepts a circle invitation
+func (cs *CircleService) AcceptInvitation(ctx context.Context, userID, invitationID string) (*models.Circle, error) {
+	// Get invitation
+	invitation, err := cs.invitationRepo.GetByID(ctx, invitationID)
+	if err != nil {
+		return nil, errors.New("invitation not found")
+	}
+
+	// Check if user is the invitee
+	if invitation.InviteeID.Hex() != userID {
+		return nil, errors.New("access denied")
+	}
+
+	// Check if invitation is still valid
+	if invitation.Status != "pending" {
+		return nil, errors.New("invitation expired")
+	}
+
+	if invitation.ExpiresAt.Before(time.Now()) {
+		return nil, errors.New("invitation expired")
+	}
+
+	// Add user to circle
+	member := models.CircleMember{
+		UserID:   invitation.InviteeID,
+		Role:     invitation.Role,
+		Status:   "active",
+		JoinedAt: time.Now(),
+	}
+
+	err = cs.circleRepo.AddMember(ctx, invitation.CircleID.Hex(), member)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update invitation status
+	err = cs.invitationRepo.UpdateStatus(ctx, invitationID, "accepted")
+	if err != nil {
+		logrus.Errorf("Failed to update invitation status: %v", err)
+	}
+
+	// Get circle to return
+	circle, err := cs.circleRepo.GetByID(ctx, invitation.CircleID.Hex())
+	if err != nil {
+		return nil, err
+	}
+
+	return circle, nil
+}
+
+// RejectInvitation rejects a circle invitation
+func (cs *CircleService) RejectInvitation(ctx context.Context, userID, invitationID string) error {
+	// Get invitation
+	invitation, err := cs.invitationRepo.GetByID(ctx, invitationID)
+	if err != nil {
+		return errors.New("invitation not found")
+	}
+
+	// Check if user is the invitee
+	if invitation.InviteeID.Hex() != userID {
+		return errors.New("access denied")
+	}
+
+	// Update invitation status
+	return cs.invitationRepo.UpdateStatus(ctx, invitationID, "rejected")
+}
+
+// GetMembers gets all members of a circle
+func (cs *CircleService) GetMembers(ctx context.Context, userID, circleID string) ([]models.CircleMember, error) {
+	// Check if user is a member of the circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isMember {
+		return nil, errors.New("access denied")
+	}
+
+	return cs.circleRepo.GetMembers(ctx, circleID)
+}
+
+// UpdateMemberRole updates a member's role in the circle
+func (cs *CircleService) UpdateMemberRole(ctx context.Context, userID, circleID, memberID string, req models.UpdateMemberRoleRequest) error {
+	// Validate request
+	if validationErrors := cs.validator.ValidateStruct(req); len(validationErrors) > 0 {
+		return errors.New("validation failed")
+	}
+
+	// Check if user is admin of the circle
+	role, err := cs.circleRepo.GetMemberRole(ctx, circleID, userID)
+	if err != nil {
+		return errors.New("access denied")
+	}
+
+	if role != "admin" {
+		return errors.New("access denied")
+	}
+
+	// Check if member exists in circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, memberID)
+	if err != nil || !isMember {
+		return errors.New("member not found")
+	}
+
+	// Update member role
+	return cs.circleRepo.UpdateMemberRole(ctx, circleID, memberID, req.Role)
+}
+
+// RemoveMember removes a member from the circle
+func (cs *CircleService) RemoveMember(ctx context.Context, userID, circleID, memberID string) error {
+	// Check if user is admin of the circle
+	role, err := cs.circleRepo.GetMemberRole(ctx, circleID, userID)
+	if err != nil {
+		return errors.New("access denied")
+	}
+
+	if role != "admin" {
+		return errors.New("access denied")
+	}
+
+	// Check if member exists in circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, memberID)
+	if err != nil || !isMember {
+		return errors.New("member not found")
+	}
+
+	// Cannot remove yourself as admin
+	if userID == memberID {
+		return errors.New("cannot remove yourself")
+	}
+
+	// Remove member
+	return cs.circleRepo.RemoveMember(ctx, circleID, memberID)
+}
+
+// GetUserInvitations gets user's circle invitations
+func (cs *CircleService) GetUserInvitations(ctx context.Context, userID, status string) ([]models.CircleInvitation, error) {
+	return cs.invitationRepo.GetUserInvitations(ctx, userID, status)
+}
+
+// Helper method to send invitation email
+func (cs *CircleService) sendInvitationEmail(ctx context.Context, invitation *models.CircleInvitation, user *models.User) {
+	if cs.emailService == nil {
+		return
+	}
+
+	// Get circle details
+	circle, err := cs.circleRepo.GetByID(ctx, invitation.CircleID.Hex())
+	if err != nil {
+		logrus.Errorf("Failed to get circle for invitation email: %v", err)
+		return
+	}
+
+	// Get inviter details
+	inviter, err := cs.userRepo.GetByID(ctx, invitation.InviterID.Hex())
+	if err != nil {
+		logrus.Errorf("Failed to get inviter for invitation email: %v", err)
+		return
+	}
+
+	// Send email
+	emailData := EmailData{
+		To:       user.Email,
+		Subject:  fmt.Sprintf("You're invited to join %s on FTrack", circle.Name),
+		Template: "circle_invitation",
+		Data: map[string]interface{}{
+			"Name":        user.FirstName,
+			"InviterName": inviter.FirstName + " " + inviter.LastName,
+			"CircleName":  circle.Name,
+			"Message":     invitation.Message,
+			"AcceptURL":   fmt.Sprintf("%s/invitations/%s/accept", cs.config.AppURL, invitation.ID.Hex()),
+			"RejectURL":   fmt.Sprintf("%s/invitations/%s/reject", cs.config.AppURL, invitation.ID.Hex()),
+		},
+	}
+
+	if err := cs.emailService.SendEmail(emailData); err != nil {
+		logrus.Errorf("Failed to send invitation email: %v", err)
+	}
 }

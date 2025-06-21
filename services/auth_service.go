@@ -2,12 +2,16 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"ftrack/models"
 	"ftrack/repositories"
 	"ftrack/utils"
+	"time"
 
 	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type AuthService struct {
@@ -236,4 +240,96 @@ func (as *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, 
 	return as.userRepo.Update(ctx, userID, map[string]interface{}{
 		"password": hashedPassword,
 	})
+}
+
+func (as *AuthService) ForgotPassword(ctx context.Context, email string) error {
+	user, err := as.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil // Don't reveal if email exists
+	}
+
+	resetToken, _ := generateSecureToken(32)
+	expiresAt := time.Now().Add(1 * time.Hour)
+
+	update := bson.M{
+		"resetToken":        resetToken,
+		"resetTokenExpires": expiresAt,
+	}
+
+	as.userRepo.Update(ctx, user.ID.Hex(), update)
+
+	// Send email here (implement your email service)
+	logrus.Infof("Password reset token generated for: %s", email)
+	return nil
+}
+
+func (as *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	if len(newPassword) < 6 {
+		return errors.New("password must be at least 6 characters")
+	}
+
+	user, err := as.userRepo.GetByResetToken(ctx, token)
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
+
+	hashedPassword, _ := as.passwordService.HashPassword(newPassword)
+
+	update := bson.M{
+		"password":          hashedPassword,
+		"resetToken":        "",
+		"resetTokenExpires": time.Time{},
+	}
+
+	return as.userRepo.Update(ctx, user.ID.Hex(), update)
+}
+
+func (as *AuthService) VerifyEmail(ctx context.Context, token string) error {
+	user, err := as.userRepo.GetByVerificationToken(ctx, token)
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
+
+	update := bson.M{
+		"isEmailVerified":   true,
+		"verificationToken": "",
+	}
+
+	return as.userRepo.Update(ctx, user.ID.Hex(), update)
+}
+
+func (as *AuthService) ResendVerification(ctx context.Context, email string) error {
+	user, err := as.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil // Don't reveal if email exists
+	}
+
+	verificationToken, _ := generateSecureToken(32)
+
+	update := bson.M{
+		"verificationToken":        verificationToken,
+		"verificationTokenExpires": time.Now().Add(24 * time.Hour),
+	}
+
+	as.userRepo.Update(ctx, user.ID.Hex(), update)
+
+	// Send email here
+	return nil
+}
+
+func (as *AuthService) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
+	user, err := as.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	user.Password = "" // Remove sensitive data
+	return user, nil
+}
+
+// Helper function
+func generateSecureToken(length int) (string, error) {
+	bytes := make([]byte, length)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes), nil
 }

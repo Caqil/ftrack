@@ -6,17 +6,35 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
 	mrand "math/rand"
+	"mime/multipart"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+var validate = validator.New()
+
+// GetUserID retrieves the user ID from the Gin context, assuming it is stored as "userID" in context.
+func GetUserID(c *gin.Context) string {
+	if userID, exists := c.Get("userID"); exists {
+		if idStr, ok := userID.(string); ok {
+			return idStr
+		}
+	}
+	return ""
+}
 
 // UUID Generation
 func GenerateUUID() string {
@@ -346,16 +364,6 @@ func MaskPhoneNumber(phone string) string {
 	return "+" + masked
 }
 
-// GenerateSecureToken generates a cryptographically secure random token
-func GenerateSecureToken(length int) (string, error) {
-	bytes := make([]byte, length)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-
-	return base64.URLEncoding.EncodeToString(bytes), nil
-}
 
 // HashString creates a SHA-256 hash of the input string
 func HashString(input string) string {
@@ -430,6 +438,34 @@ func GetNextWorkday() time.Time {
 	return now
 }
 
+// Returns a map of field errors if validation fails.
+func ValidateStruct(s interface{}) map[string]string {
+	err := validate.Struct(s)
+	if err == nil {
+		return nil
+	}
+	errors := make(map[string]string)
+	for _, err := range err.(validator.ValidationErrors) {
+		errors[err.Field()] = err.Tag()
+	}
+	return errors
+}
+
+// TimeAgo returns a human-readable relative time string (e.g., "5 minutes ago")
+func TimeAgo(t time.Time) string {
+	duration := time.Since(t)
+	if duration < time.Minute {
+		return "just now"
+	}
+	if duration < time.Hour {
+		return fmt.Sprintf("%d minutes ago", int(duration.Minutes()))
+	}
+	if duration < 24*time.Hour {
+		return fmt.Sprintf("%d hours ago", int(duration.Hours()))
+	}
+	return fmt.Sprintf("%d days ago", int(duration.Hours()/24))
+}
+
 // FormatRelativeTime formats time relative to now (e.g., "2 hours ago")
 func FormatRelativeTime(t time.Time) string {
 	now := time.Now()
@@ -498,4 +534,43 @@ func TimeFunctionExecution(name string, fn func()) {
 	fn()
 	duration := time.Since(start)
 	fmt.Printf("⏱️  %s took %v\n", name, duration)
+}
+
+// UploadFile saves the uploaded file to the specified directory and returns the file URL or path.
+func UploadFile(file multipart.File, header *multipart.FileHeader, folder string) (string, error) {
+	// Ensure the folder exists
+	if err := os.MkdirAll(folder, os.ModePerm); err != nil {
+		return "", fmt.Errorf("failed to create folder: %w", err)
+	}
+
+	// Generate a unique filename
+	filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), header.Filename)
+	filepath := filepath.Join(folder, filename)
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		return "", fmt.Errorf("failed to save file: %w", err)
+	}
+
+	// Return the relative path or URL as needed
+	return filepath, nil
+}
+
+// IsValidMediaFile checks if the file extension matches the allowed types for the given media type.
+func IsValidMediaFile(filename, mediaType string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch mediaType {
+	case "photo":
+		return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif"
+	case "video":
+		return ext == ".mp4" || ext == ".mov" || ext == ".avi" || ext == ".mkv"
+	default:
+		return false
+	}
 }

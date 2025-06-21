@@ -1,10 +1,12 @@
 package config
 
 import (
+	"ftrack/services"
 	"os"
 	"strconv"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 )
 
 type Config struct {
@@ -27,6 +29,15 @@ type Config struct {
 	LocationRetention int // days
 	RateLimitRequest  int
 	RateLimitWindow   int // minutes
+
+	EmailProvider string `env:"EMAIL_PROVIDER" envDefault:"smtp"`
+
+	// SMTP Settings
+	SMTPHost     string `env:"SMTP_HOST" envDefault:"smtp.gmail.com"`
+	SMTPPort     string `env:"SMTP_PORT" envDefault:"587"`
+	SMTPUsername string `env:"SMTP_USERNAME"`
+	SMTPPassword string `env:"SMTP_PASSWORD"`
+	SMTPFrom     string `env:"SMTP_FROM"`
 }
 
 func Load() *Config {
@@ -82,4 +93,27 @@ func getEnvAsInt(key string, defaultValue int) int {
 		}
 	}
 	return defaultValue
+}
+
+// InitEmailService initializes the email service based on configuration
+func (c *Config) InitEmailService() services.EmailService {
+	switch c.EmailProvider {
+	case "smtp":
+		if c.SMTPUsername == "" || c.SMTPPassword == "" {
+			logrus.Warn("SMTP credentials not configured, using mock email service")
+			return services.NewMockEmailService()
+		}
+		return services.NewSMTPEmailService(
+			c.SMTPHost,
+			c.SMTPPort,
+			c.SMTPUsername,
+			c.SMTPPassword,
+			c.SMTPFrom,
+		)
+	case "mock":
+		return services.NewMockEmailService()
+	default:
+		logrus.Warn("Unknown email provider, using mock email service")
+		return services.NewMockEmailService()
+	}
 }

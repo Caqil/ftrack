@@ -75,6 +75,8 @@ type InviteMemberRequest struct {
 	Email       string            `json:"email,omitempty" validate:"omitempty,email"`
 	Phone       string            `json:"phone,omitempty" validate:"omitempty,min=10"`
 	Permissions MemberPermissions `json:"permissions"`
+	Role        string            `json:"role" validate:"required,oneof=admin member"`
+	Message     string            `json:"message,omitempty"`
 }
 
 type UpdateCircleRequest struct {
@@ -85,4 +87,21 @@ type UpdateCircleRequest struct {
 type UpdateMemberPermissionsRequest struct {
 	UserID      string            `json:"userId" validate:"required"`
 	Permissions MemberPermissions `json:"permissions"`
+}
+type UpdateMemberRoleRequest struct {
+	Role string `json:"role" validate:"required,oneof=admin member"`
+}
+
+type CircleInvitation struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	CircleID  primitive.ObjectID `json:"circleId" bson:"circleId"`
+	InviterID primitive.ObjectID `json:"inviterId" bson:"inviterId"`
+	InviteeID primitive.ObjectID `json:"inviteeId" bson:"inviteeId"`
+	Email     string             `json:"email" bson:"email"`
+	Role      string             `json:"role" bson:"role"`
+	Message   string             `json:"message,omitempty" bson:"message,omitempty"`
+	Status    string             `json:"status" bson:"status"` // pending, accepted, rejected, expired
+	ExpiresAt time.Time          `json:"expiresAt" bson:"expiresAt"`
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
 }

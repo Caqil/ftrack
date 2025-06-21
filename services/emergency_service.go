@@ -7,7 +7,7 @@ import (
 	"ftrack/models"
 	"ftrack/repositories"
 	"ftrack/utils"
-	"life360-backend/websocket"
+	"ftrack/websocket"
 	"time"
 
 	"github.com/sirupsen/logrus"

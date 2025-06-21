@@ -34,10 +34,21 @@ type User struct {
 	LastSeen time.Time `json:"lastSeen" bson:"lastSeen"`
 	IsOnline bool      `json:"isOnline" bson:"isOnline"`
 
-	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
-}
+	CreatedAt                time.Time  `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                time.Time  `json:"updatedAt" bson:"updatedAt"`
+	IsEmailVerified          bool       `json:"isEmailVerified" bson:"isEmailVerified"`
+	EmailVerifiedAt          *time.Time `json:"emailVerifiedAt,omitempty" bson:"emailVerifiedAt,omitempty"`
+	VerificationToken        string     `json:"-" bson:"verificationToken,omitempty"`
+	VerificationTokenExpires time.Time  `json:"-" bson:"verificationTokenExpires,omitempty"`
 
+	// Password reset
+	ResetToken        string    `json:"-" bson:"resetToken,omitempty"`
+	ResetTokenExpires time.Time `json:"-" bson:"resetTokenExpires,omitempty"`
+
+	// Session tracking
+	LastLogoutAt *time.Time `json:"lastLogoutAt,omitempty" bson:"lastLogoutAt,omitempty"`
+	LastSeenAt   *time.Time `json:"lastSeenAt,omitempty" bson:"lastSeenAt,omitempty"`
+}
 
 type UserPreferences struct {
 	Notifications NotificationPrefs `json:"notifications" bson:"notifications"`
