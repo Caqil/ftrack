@@ -90,7 +90,6 @@ func (us *UserService) SearchUsers(ctx context.Context, query string, limit int)
 	// Remove sensitive data
 	for i := range users {
 		users[i].Password = ""
-		users[i].DeviceToken = ""
 	}
 
 	return users, nil
@@ -113,7 +112,6 @@ func (us *UserService) GetUsersByIDs(ctx context.Context, userIDs []string) ([]m
 	// Remove sensitive data
 	for i := range users {
 		users[i].Password = ""
-		users[i].DeviceToken = ""
 	}
 
 	return users, nil

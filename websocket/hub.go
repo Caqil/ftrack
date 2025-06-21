@@ -2,8 +2,8 @@ package websocket
 
 import (
 	"context"
+	"ftrack/interfaces"
 	"ftrack/models"
-	"ftrack/services"
 	"sync"
 	"time"
 
@@ -32,13 +32,13 @@ type Hub struct {
 	// Send message to specific user
 	sendToUser chan UserMessage
 
-	// Service dependencies
-	authService      *services.AuthService
-	userService      *services.UserService
-	circleService    *services.CircleService
-	locationService  *services.LocationService
-	messageService   *services.MessageService
-	emergencyService *services.EmergencyService
+	// Service dependencies (now using interfaces)
+	authService      interfaces.AuthService
+	userService      interfaces.UserService
+	circleService    interfaces.CircleService
+	locationService  interfaces.LocationService
+	messageService   interfaces.MessageService
+	emergencyService interfaces.EmergencyService
 
 	// Hub statistics
 	stats HubStats
@@ -88,12 +88,12 @@ type HubStats struct {
 }
 
 func NewHub(
-	authService *services.AuthService,
-	userService *services.UserService,
-	circleService *services.CircleService,
-	locationService *services.LocationService,
-	messageService *services.MessageService,
-	emergencyService *services.EmergencyService,
+	authService interfaces.AuthService,
+	userService interfaces.UserService,
+	circleService interfaces.CircleService,
+	locationService interfaces.LocationService,
+	messageService interfaces.MessageService,
+	emergencyService interfaces.EmergencyService,
 ) *Hub {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -150,6 +150,19 @@ func (h *Hub) Run() {
 			return
 		}
 	}
+}
+
+// GetCircleMembers gets all connected clients in a specific circle
+func (h *Hub) GetCircleMembers(circleID string) []*Client {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	room := h.rooms[circleID]
+	if room == nil {
+		return []*Client{}
+	}
+
+	return room.GetClients()
 }
 
 func (h *Hub) registerClient(client *Client) {

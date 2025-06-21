@@ -43,15 +43,6 @@ type HealthResponse struct {
 	Uptime    string            `json:"uptime"`
 }
 
-// Authentication Response
-type AuthResponse struct {
-	User         User   `json:"user"`
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
-	TokenType    string `json:"tokenType"`
-	ExpiresIn    int64  `json:"expiresIn"`
-}
-
 // Statistics Response
 type StatsResponse struct {
 	Users     UserStats      `json:"users"`

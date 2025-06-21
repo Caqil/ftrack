@@ -1,3 +1,4 @@
+// config/config.go - Updated with baseURL for email links
 package config
 
 import (
@@ -15,6 +16,7 @@ type Config struct {
 	DatabaseURL string
 	RedisURL    string
 	JWTSecret   string
+	BaseURL     string // Added for email links
 
 	// Firebase Config
 	FirebaseCredentials string
@@ -47,6 +49,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "mongodb://localhost:27017/life360"),
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379"),
 		JWTSecret:   getEnv("JWT_SECRET", "your-super-secret-jwt-key"),
+		BaseURL:     getEnv("BASE_URL", "http://localhost:8080"), // Added BaseURL
 
 		// Firebase
 		FirebaseCredentials: getEnv("FIREBASE_CREDENTIALS", ""),
@@ -61,6 +64,14 @@ func Load() *Config {
 		LocationRetention: getEnvAsInt("LOCATION_RETENTION_DAYS", 30),
 		RateLimitRequest:  getEnvAsInt("RATE_LIMIT_REQUESTS", 100),
 		RateLimitWindow:   getEnvAsInt("RATE_LIMIT_WINDOW_MINUTES", 1),
+
+		// Email settings
+		EmailProvider: getEnv("EMAIL_PROVIDER", "smtp"),
+		SMTPHost:      getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:      getEnv("SMTP_PORT", "587"),
+		SMTPUsername:  getEnv("SMTP_USERNAME", ""),
+		SMTPPassword:  getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:      getEnv("SMTP_FROM", "noreply@ftrack.app"),
 	}
 }
 
@@ -103,12 +114,14 @@ func (c *Config) InitEmailService() services.EmailService {
 			logrus.Warn("SMTP credentials not configured, using mock email service")
 			return services.NewMockEmailService()
 		}
+		// Pass BaseURL to the email service for auth links
 		return services.NewSMTPEmailService(
 			c.SMTPHost,
 			c.SMTPPort,
 			c.SMTPUsername,
 			c.SMTPPassword,
 			c.SMTPFrom,
+			c.BaseURL, // Added BaseURL parameter
 		)
 	case "mock":
 		return services.NewMockEmailService()

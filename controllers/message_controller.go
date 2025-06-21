@@ -409,7 +409,7 @@ func (mc *MessageController) RemoveReaction(c *gin.Context) {
 		return
 	}
 
-	err := mc.messageService.RemoveReaction(c.Request.Context(), userID, messageID, emoji)
+	err := mc.messageService.RemoveReaction(c.Request.Context(), userID, messageID)
 	if err != nil {
 		logrus.Errorf("Remove reaction failed: %v", err)
 

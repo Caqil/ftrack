@@ -224,14 +224,13 @@ func (c *Client) handleAuth(request models.WSRequest) {
 	}
 
 	// Validate JWT token using auth service
-	user, err := c.hub.authService.ValidateToken(context.Background(), tokenData)
+	user, err := c.hub.authService.ValidateToken(tokenData)
 	if err != nil {
 		c.sendError(models.WSErrorUnauthorized, "Invalid token")
 		return
 	}
 
-	c.userID = user.ID.Hex()
-	c.user = user
+	c.userID = user.ID
 	c.isAuthenticated = true
 
 	// Get user's circles

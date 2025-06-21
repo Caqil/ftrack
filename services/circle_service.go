@@ -6,6 +6,7 @@ import (
 	"ftrack/models"
 	"ftrack/repositories"
 	"ftrack/utils"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -330,4 +331,254 @@ func (cs *CircleService) DeleteCircle(ctx context.Context, userID, circleID stri
 
 func (cs *CircleService) UpdateLastActivity(ctx context.Context, circleID, userID string) error {
 	return cs.circleRepo.UpdateLastActivity(ctx, circleID, userID)
+}
+
+// GetCircle - wrapper for GetCircleByID to match controller expectations
+func (cs *CircleService) GetCircle(ctx context.Context, userID, circleID string) (*models.Circle, error) {
+	return cs.GetCircleByID(ctx, userID, circleID)
+}
+
+// AcceptInvitation accepts a circle invitation
+func (cs *CircleService) AcceptInvitation(ctx context.Context, userID, invitationID string) (*models.Circle, error) {
+	// Get invitation details
+	invitation, err := cs.circleRepo.GetInvitationByID(ctx, invitationID)
+	if err != nil {
+		return nil, errors.New("invitation not found")
+	}
+
+	// Check if invitation is for this user
+	if invitation.InviteeID.Hex() != userID {
+		return nil, errors.New("access denied")
+	}
+
+	// Check if invitation is still valid
+	if invitation.Status != "pending" {
+		return nil, errors.New("invitation not pending")
+	}
+
+	// Check if invitation has expired
+	if invitation.ExpiresAt.Before(time.Now()) {
+		return nil, errors.New("invitation expired")
+	}
+
+	// Get circle
+	circle, err := cs.circleRepo.GetByID(ctx, invitation.CircleID.Hex())
+	if err != nil {
+		return nil, errors.New("circle not found")
+	}
+
+	// Check member limit
+	if len(circle.Members) >= circle.Settings.MaxMembers {
+		return nil, errors.New("circle has reached maximum member limit")
+	}
+
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, errors.New("invalid user ID")
+	}
+
+	// Add member to circle
+	newMember := models.CircleMember{
+		UserID: userObjectID,
+		Role:   "member",
+		Status: "active",
+		Permissions: models.MemberPermissions{
+			CanSeeLocation:   true,
+			CanSeeDriving:    true,
+			CanSendMessages:  true,
+			CanManagePlaces:  false,
+			CanReceiveAlerts: true,
+			CanSendEmergency: true,
+		},
+		JoinedAt: time.Now(),
+	}
+
+	err = cs.circleRepo.AddMember(ctx, invitation.CircleID.Hex(), newMember)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update invitation status
+	err = cs.circleRepo.UpdateInvitationStatus(ctx, invitationID, "accepted")
+	if err != nil {
+		// Log error but don't fail the operation
+		utils.GetLogger().Warn("Failed to update invitation status: ", err)
+	}
+
+	// Update circle stats
+	circle.Stats.TotalMembers++
+	circle.Stats.ActiveMembers++
+	err = cs.circleRepo.Update(ctx, invitation.CircleID.Hex(), bson.M{
+		"stats": circle.Stats,
+	})
+	if err != nil {
+		// Log error but don't fail the operation
+		utils.GetLogger().Warn("Failed to update circle stats: ", err)
+	}
+
+	return cs.circleRepo.GetByID(ctx, invitation.CircleID.Hex())
+}
+
+// RejectInvitation rejects a circle invitation
+func (cs *CircleService) RejectInvitation(ctx context.Context, userID, invitationID string) error {
+	// Get invitation details
+	invitation, err := cs.circleRepo.GetInvitationByID(ctx, invitationID)
+	if err != nil {
+		return errors.New("invitation not found")
+	}
+
+	// Check if invitation is for this user
+	if invitation.InviteeID.Hex() != userID {
+		return errors.New("access denied")
+	}
+
+	// Check if invitation is still pending
+	if invitation.Status != "pending" {
+		return errors.New("invitation not pending")
+	}
+
+	// Update invitation status
+	return cs.circleRepo.UpdateInvitationStatus(ctx, invitationID, "rejected")
+}
+
+// GetMembers gets all members of a circle
+func (cs *CircleService) GetMembers(ctx context.Context, userID, circleID string) ([]models.CircleMember, error) {
+	// Check if user is a member of the circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isMember {
+		return nil, errors.New("access denied")
+	}
+
+	// Get circle with members
+	circle, err := cs.circleRepo.GetByID(ctx, circleID)
+	if err != nil {
+		return nil, errors.New("circle not found")
+	}
+
+	return circle.Members, nil
+}
+
+// UpdateMemberRole updates a member's role in the circle
+func (cs *CircleService) UpdateMemberRole(ctx context.Context, userID, circleID, memberID string, req models.UpdateMemberRoleRequest) error {
+	// Check if user is admin
+	role, err := cs.circleRepo.GetMemberRole(ctx, circleID, userID)
+	if err != nil {
+		return err
+	}
+
+	if role != "admin" {
+		return errors.New("access denied")
+	}
+
+	// Validate request
+	if validationErrors := cs.validator.ValidateStruct(req); len(validationErrors) > 0 {
+		return errors.New("validation failed")
+	}
+
+	// Validate role
+	validRoles := []string{"admin", "member", "moderator"}
+	roleValid := false
+	for _, validRole := range validRoles {
+		if req.Role == validRole {
+			roleValid = true
+			break
+		}
+	}
+	if !roleValid {
+		return errors.New("validation failed")
+	}
+
+	// Check if member exists in circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, memberID)
+	if err != nil {
+		return err
+	}
+
+	if !isMember {
+		return errors.New("member not found")
+	}
+
+	// Don't allow changing own role
+	if userID == memberID {
+		return errors.New("cannot change your own role")
+	}
+
+	// Update member role
+	return cs.circleRepo.UpdateMemberRole(ctx, circleID, memberID, req.Role)
+}
+
+// RemoveMember removes a member from the circle
+func (cs *CircleService) RemoveMember(ctx context.Context, userID, circleID, memberID string) error {
+	// Check if user is admin
+	role, err := cs.circleRepo.GetMemberRole(ctx, circleID, userID)
+	if err != nil {
+		return err
+	}
+
+	if role != "admin" {
+		return errors.New("access denied")
+	}
+
+	// Check if member exists in circle
+	isMember, err := cs.circleRepo.IsMember(ctx, circleID, memberID)
+	if err != nil {
+		return err
+	}
+
+	if !isMember {
+		return errors.New("member not found")
+	}
+
+	// Don't allow removing self
+	if userID == memberID {
+		return errors.New("cannot remove yourself. Use leave circle instead")
+	}
+
+	// Get member role to prevent removing other admins
+	memberRole, err := cs.circleRepo.GetMemberRole(ctx, circleID, memberID)
+	if err != nil {
+		return err
+	}
+
+	if memberRole == "admin" {
+		return errors.New("cannot remove another admin")
+	}
+
+	// Remove member
+	err = cs.circleRepo.RemoveMember(ctx, circleID, memberID)
+	if err != nil {
+		return err
+	}
+
+	// Update circle stats
+	circle, err := cs.circleRepo.GetByID(ctx, circleID)
+	if err == nil {
+		circle.Stats.TotalMembers--
+		circle.Stats.ActiveMembers--
+		cs.circleRepo.Update(ctx, circleID, bson.M{
+			"stats": circle.Stats,
+		})
+	}
+
+	return nil
+}
+
+// GetUserInvitations gets all invitations for a user
+func (cs *CircleService) GetUserInvitations(ctx context.Context, userID, status string) ([]models.CircleInvitation, error) {
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, errors.New("invalid user ID")
+	}
+
+	// Get invitations for user
+	invitations, err := cs.circleRepo.GetUserInvitations(ctx, userObjectID, status)
+	if err != nil {
+		return nil, err
+	}
+
+	return invitations, nil
 }

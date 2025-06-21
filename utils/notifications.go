@@ -373,19 +373,3 @@ type BatchNotification struct {
 type EmailService interface {
 	SendEmail(ctx context.Context, email EmailMessage) (*NotificationResult, error)
 }
-
-// Mock email service for development
-type MockEmailService struct{}
-
-func NewEmailService() EmailService {
-	return &MockEmailService{}
-}
-
-func (mes *MockEmailService) SendEmail(ctx context.Context, email EmailMessage) (*NotificationResult, error) {
-	// Mock implementation - in production, use SendGrid or similar
-	fmt.Printf("📧 Mock Email sent to %s: %s\n", email.To, email.Subject)
-	return &NotificationResult{
-		Success:   true,
-		MessageID: "mock-email-" + GenerateUUID(),
-	}, nil
-}

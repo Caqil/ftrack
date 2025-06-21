@@ -14,6 +14,61 @@ type ServiceError struct {
 	Cause      error  `json:"-"` // Original error, not exposed in JSON
 }
 
+// AppError represents a custom application error
+type AppError struct {
+	// Type represents the error category
+	Type string `json:"type"`
+
+	// Message is the human-readable error message
+	Message string `json:"message"`
+
+	// Code is the HTTP status code
+	Code int `json:"code"`
+
+	// Details contains additional context about the error
+	Details map[string]interface{} `json:"details,omitempty"`
+
+	// Internal error for logging (not exposed in JSON)
+	Err error `json:"-"`
+}
+
+// Error implements the error interface
+func (e *AppError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %s (caused by: %v)", e.Type, e.Message, e.Err)
+	}
+	return fmt.Sprintf("%s: %s", e.Type, e.Message)
+}
+
+// Unwrap returns the underlying error for error wrapping
+func (e *AppError) Unwrap() error {
+	return e.Err
+}
+
+// WithDetails adds details to the error
+func (e *AppError) WithDetails(key string, value interface{}) *AppError {
+	if e.Details == nil {
+		e.Details = make(map[string]interface{})
+	}
+	e.Details[key] = value
+	return e
+}
+
+// WithError wraps an underlying error
+func (e *AppError) WithError(err error) *AppError {
+	e.Err = err
+	return e
+}
+
+// NewAppError creates a new AppError
+func NewAppError(errorType, message string, code int) *AppError {
+	return &AppError{
+		Type:    errorType,
+		Message: message,
+		Code:    code,
+		Details: make(map[string]interface{}),
+	}
+}
 func (e ServiceError) Error() string {
 	if e.Details != "" {
 		return fmt.Sprintf("%s: %s (%s)", e.Code, e.Message, e.Details)

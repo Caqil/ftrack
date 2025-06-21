@@ -266,3 +266,256 @@ func (ur *UserRepository) GetByVerificationToken(ctx context.Context, token stri
 
 	return &user, nil
 }
+
+
+func (ur *UserRepository) SetOffline(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"isOnline":  false,
+			"updatedAt": time.Now(),
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) UpdateVerificationStatus(ctx context.Context, userID string, isVerified bool) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"isVerified": isVerified,
+			"updatedAt":  time.Now(),
+		},
+	}
+
+	if isVerified {
+		update["$unset"] = bson.M{
+			"verificationToken": "",
+			"tokenExpiresAt":    "",
+		}
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) Enable2FA(ctx context.Context, userID, secret string, backupCodes []string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"twoFactorEnabled": true,
+			"twoFactorSecret":  secret,
+			"backupCodes":      backupCodes,
+			"updatedAt":        time.Now(),
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) Disable2FA(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"twoFactorEnabled": false,
+			"twoFactorSecret":  "",
+			"backupCodes":      []string{},
+			"updatedAt":        time.Now(),
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) UpdateBackupCodes(ctx context.Context, userID string, backupCodes []string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"backupCodes": backupCodes,
+			"updatedAt":   time.Now(),
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"password":  hashedPassword,
+			"updatedAt": time.Now(),
+		},
+		"$unset": bson.M{
+			"resetToken":     "",
+			"tokenExpiresAt": "",
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) IncrementLoginAttempts(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$inc": bson.M{"loginAttempts": 1},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) ResetLoginAttempts(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"loginAttempts": 0,
+			"updatedAt":     time.Now(),
+		},
+		"$unset": bson.M{"lockedUntil": ""},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) LockAccount(ctx context.Context, userID string, lockDuration time.Duration) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"lockedUntil": time.Now().Add(lockDuration),
+			"updatedAt":   time.Now(),
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) UnlockAccount(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"loginAttempts": 0,
+			"updatedAt":     time.Now(),
+		},
+		"$unset": bson.M{"lockedUntil": ""},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (ur *UserRepository) IsAccountLocked(ctx context.Context, userID string) (bool, error) {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return false, errors.New("invalid user ID")
+	}
+
+	var user models.User
+	filter := bson.M{"_id": objectID}
+	err = ur.collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		return false, err
+	}
+
+	if !user.LockedUntil.IsZero() && time.Now().Before(user.LockedUntil) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (ur *UserRepository) GetByAuthProvider(ctx context.Context, provider, providerID string) (*models.User, error) {
+	var user models.User
+	filter := bson.M{
+		"authProvider":   provider,
+		"authProviderId": providerID,
+	}
+
+	err := ur.collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (ur *UserRepository) UpdateOAuthInfo(ctx context.Context, userID, provider, providerID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"authProvider":   provider,
+			"authProviderId": providerID,
+			"updatedAt":      time.Now(),
+		},
+	}
+
+	_, err = ur.collection.UpdateOne(ctx, filter, update)
+	return err
+}

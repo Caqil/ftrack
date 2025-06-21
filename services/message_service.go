@@ -240,19 +240,22 @@ func (ms *MessageService) GetUnreadCount(ctx context.Context, userID, circleID s
 
 	return ms.messageRepo.GetUnreadCount(ctx, circleID, userID)
 }
-
 func (ms *MessageService) broadcastMessage(senderID, circleID string, message models.Message) {
+	// Create the WebSocket message with proper structure
 	wsMessage := models.WSMessage{
-		Type:     websocket.TypeMessage,
-		Data:     message,
-		CircleID: circleID,
+		Type: models.WSTypeMessage,
+		Data: models.WSMessageData{
+			MessageID: message.ID.Hex(),
+			CircleID:  message.CircleID.Hex(),
+			SenderID:  message.SenderID.Hex(),
+			Type:      message.Type,
+			Content:   message.Content,
+			Media:     &message.Media,
+			Timestamp: message.CreatedAt,
+		},
+		Timestamp: time.Now(),
 	}
 
-	broadcastMsg := websocket.BroadcastMessage{
-		CircleID: circleID,
-		Message:  wsMessage,
-	}
-
-	// Send to WebSocket hub
-	ms.websocketHub.broadcast <- broadcastMsg
+	// Use the public BroadcastMessage method instead of direct channel access
+	ms.websocketHub.BroadcastMessage(circleID, wsMessage)
 }

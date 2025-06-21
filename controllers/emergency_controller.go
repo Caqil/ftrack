@@ -451,13 +451,13 @@ func (ec *EmergencyController) GetEmergencyStats(c *gin.Context) {
 		return
 	}
 
-	circleID := c.Query("circleId")
+	c.Query("circleId")
 	period := c.Query("period")
 	if period == "" {
 		period = "month"
 	}
 
-	stats, err := ec.emergencyService.GetEmergencyStats(c.Request.Context(), userID, circleID, period)
+	stats, err := ec.emergencyService.GetEmergencyStats(c.Request.Context(), userID)
 	if err != nil {
 		logrus.Errorf("Get emergency stats failed: %v", err)
 
@@ -503,7 +503,7 @@ func (ec *EmergencyController) TestEmergency(c *gin.Context) {
 	// Mark as test emergency
 	req.Type = "test"
 
-	emergency, err := ec.emergencyService.CreateTestEmergency(c.Request.Context(), userID, req)
+	emergency, err := ec.emergencyService.CreateEmergency(c.Request.Context(), userID, req)
 	if err != nil {
 		logrus.Errorf("Create test emergency failed: %v", err)
 
