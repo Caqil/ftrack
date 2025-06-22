@@ -187,17 +187,6 @@ type AutomationRule struct {
 	UpdatedAt     time.Time           `json:"updatedAt" bson:"updatedAt"`
 }
 
-type RuleCondition struct {
-	Type          string      `json:"type" bson:"type"`         // keyword, time, sender, message_type
-	Operator      string      `json:"operator" bson:"operator"` // contains, equals, starts_with, ends_with
-	Value         interface{} `json:"value" bson:"value"`
-	CaseSensitive bool        `json:"caseSensitive" bson:"caseSensitive"`
-}
-
-type RuleAction struct {
-	Type   string                 `json:"type" bson:"type"` // reply, forward, notify, mark_read
-	Config map[string]interface{} `json:"config" bson:"config"`
-}
 
 // Message Exports
 type MessageExport struct {

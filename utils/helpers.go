@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"ftrack/models"
 	"io"
 	"math"
 	mrand "math/rand"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -625,4 +628,80 @@ func IsValidMediaFile(filename, mediaType string) bool {
 	default:
 		return false
 	}
+}
+
+func HandleServiceError(c *gin.Context, err error) {
+	switch err.Error() {
+	case "access denied":
+		ForbiddenResponse(c, "Access denied")
+	case "place not found":
+		NotFoundResponse(c, "Place not found")
+	case "user not found":
+		NotFoundResponse(c, "User not found")
+	case "invalid user ID":
+		BadRequestResponse(c, "Invalid user ID")
+	case "invalid place ID":
+		BadRequestResponse(c, "Invalid place ID")
+	case "invalid coordinates":
+		BadRequestResponse(c, "Invalid coordinates")
+	case "radius must be between 10 and 5000 meters":
+		BadRequestResponse(c, "Radius must be between 10 and 5000 meters")
+	default:
+		InternalServerErrorResponse(c, "Internal server error")
+	}
+}
+
+func NotImplementedResponse(c *gin.Context, message string) {
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"success": false,
+		"message": message,
+		"status":  "not_implemented",
+	})
+}
+
+func ValidateCreatePlaceRequest(req models.CreatePlaceRequest) error {
+	if req.Name == "" {
+		return errors.New("place name is required")
+	}
+	if len(req.Name) > 100 {
+		return errors.New("place name too long")
+	}
+	if req.Latitude < -90 || req.Latitude > 90 {
+		return errors.New("invalid latitude")
+	}
+	if req.Longitude < -180 || req.Longitude > 180 {
+		return errors.New("invalid longitude")
+	}
+	if req.Radius < 10 || req.Radius > 5000 {
+		return errors.New("radius must be between 10 and 5000 meters")
+	}
+	if req.Category == "" {
+		return errors.New("category is required")
+	}
+	if req.Priority < 0 || req.Priority > 10 {
+		return errors.New("priority must be between 0 and 10")
+	}
+	return nil
+}
+
+func ValidateUpdatePlaceRequest(req models.UpdatePlaceRequest) error {
+	if req.Name != nil && *req.Name == "" {
+		return errors.New("place name cannot be empty")
+	}
+	if req.Name != nil && len(*req.Name) > 100 {
+		return errors.New("place name too long")
+	}
+	if req.Latitude != nil && (*req.Latitude < -90 || *req.Latitude > 90) {
+		return errors.New("invalid latitude")
+	}
+	if req.Longitude != nil && (*req.Longitude < -180 || *req.Longitude > 180) {
+		return errors.New("invalid longitude")
+	}
+	if req.Radius != nil && (*req.Radius < 10 || *req.Radius > 5000) {
+		return errors.New("radius must be between 10 and 5000 meters")
+	}
+	if req.Priority != nil && (*req.Priority < 0 || *req.Priority > 10) {
+		return errors.New("priority must be between 0 and 10")
+	}
+	return nil
 }
