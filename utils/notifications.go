@@ -58,7 +58,6 @@ func NewNotificationService(firebaseCredentials, twilioSID, twilioToken, twilioN
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize FCM client: %v", err)
 	}
-
 	// Initialize Twilio
 	twilioClient := twilio.NewRestClientWithParams(twilio.ClientParams{
 		Username: twilioSID,
@@ -69,7 +68,6 @@ func NewNotificationService(firebaseCredentials, twilioSID, twilioToken, twilioN
 		fcmClient:    fcmClient,
 		twilioClient: twilioClient,
 		twilioNumber: twilioNumber,
-		emailService: NewEmailService(),
 	}, nil
 }
 

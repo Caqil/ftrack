@@ -110,11 +110,6 @@ func getEnvAsInt(key string, defaultValue int) int {
 func (c *Config) InitEmailService() services.EmailService {
 	switch c.EmailProvider {
 	case "smtp":
-		if c.SMTPUsername == "" || c.SMTPPassword == "" {
-			logrus.Warn("SMTP credentials not configured, using mock email service")
-			return services.NewMockEmailService()
-		}
-		// Pass BaseURL to the email service for auth links
 		return services.NewSMTPEmailService(
 			c.SMTPHost,
 			c.SMTPPort,

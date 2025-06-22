@@ -214,6 +214,59 @@ func NormalizePhoneNumber(phone string) string {
 	return "+" + cleaned
 }
 
+// Share Code Generation - for temporary location sharing
+func GenerateShareCode() string {
+	// Generate 8-character alphanumeric code (uppercase)
+	// Format: ABC12DEF
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const length = 8
+
+	// Seed the random number generator
+	mrand.Seed(time.Now().UnixNano())
+
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[mrand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+// Emergency Code Generation - for emergency location sharing
+func GenerateEmergencyCode() string {
+	// Generate 6-character emergency code with prefix
+	// Format: EMG123ABC
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const length = 6
+	const prefix = "EMG"
+
+	// Seed the random number generator
+	mrand.Seed(time.Now().UnixNano())
+
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[mrand.Intn(len(charset))]
+	}
+	return prefix + string(b)
+}
+
+// Trip Share Code Generation - for trip sharing
+func GenerateTripShareCode() string {
+	// Generate 10-character code for trip sharing
+	// Format: TR12AB34CD
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const length = 8
+	const prefix = "TR"
+
+	// Seed the random number generator
+	mrand.Seed(time.Now().UnixNano())
+
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[mrand.Intn(len(charset))]
+	}
+	return prefix + string(b)
+}
+
 // File Utilities
 func GetFileExtension(filename string) string {
 	parts := strings.Split(filename, ".")
@@ -363,7 +416,6 @@ func MaskPhoneNumber(phone string) string {
 	masked := strings.Repeat("*", len(cleaned)-4) + visible
 	return "+" + masked
 }
-
 
 // HashString creates a SHA-256 hash of the input string
 func HashString(input string) string {

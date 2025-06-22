@@ -88,10 +88,12 @@ type UpdateMemberPermissionsRequest struct {
 	UserID      string            `json:"userId" validate:"required"`
 	Permissions MemberPermissions `json:"permissions"`
 }
+
 type UpdateMemberRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=admin member"`
 }
 
+// Invitation model
 type CircleInvitation struct {
 	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
 	CircleID  primitive.ObjectID `json:"circleId" bson:"circleId"`
@@ -104,4 +106,56 @@ type CircleInvitation struct {
 	ExpiresAt time.Time          `json:"expiresAt" bson:"expiresAt"`
 	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
 	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+// Join Request model
+type JoinRequest struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	CircleID  primitive.ObjectID `json:"circleId" bson:"circleId"`
+	UserID    primitive.ObjectID `json:"userId" bson:"userId"`
+	Message   string             `json:"message,omitempty" bson:"message,omitempty"`
+	Status    string             `json:"status" bson:"status"` // pending, approved, declined
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+// Announcement model
+type CircleAnnouncement struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	CircleID  primitive.ObjectID `json:"circleId" bson:"circleId"`
+	AuthorID  primitive.ObjectID `json:"authorId" bson:"authorId"`
+	Title     string             `json:"title" bson:"title"`
+	Message   string             `json:"message" bson:"message"`
+	Type      string             `json:"type" bson:"type"` // info, warning, urgent
+	Priority  int                `json:"priority" bson:"priority"`
+	IsRead    map[string]bool    `json:"isRead" bson:"isRead"` // userID -> read status
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+// Activity model
+type CircleActivity struct {
+	ID        primitive.ObjectID     `json:"id" bson:"_id,omitempty"`
+	CircleID  primitive.ObjectID     `json:"circleId" bson:"circleId"`
+	UserID    primitive.ObjectID     `json:"userId" bson:"userId"`
+	Type      string                 `json:"type" bson:"type"` // join, leave, location, place, emergency, message
+	Action    string                 `json:"action" bson:"action"`
+	Data      map[string]interface{} `json:"data" bson:"data"`
+	CreatedAt time.Time              `json:"createdAt" bson:"createdAt"`
+}
+
+// Export Job model
+type ExportJob struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	CircleID  primitive.ObjectID `json:"circleId" bson:"circleId"`
+	UserID    primitive.ObjectID `json:"userId" bson:"userId"`
+	Format    string             `json:"format" bson:"format"` // json, csv, xlsx
+	Includes  []string           `json:"includes" bson:"includes"`
+	Status    string             `json:"status" bson:"status"` // pending, processing, completed, failed
+	Progress  int                `json:"progress" bson:"progress"`
+	FileURL   string             `json:"fileUrl,omitempty" bson:"fileUrl,omitempty"`
+	Error     string             `json:"error,omitempty" bson:"error,omitempty"`
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+	ExpiresAt time.Time          `json:"expiresAt" bson:"expiresAt"`
 }

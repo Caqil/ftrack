@@ -66,13 +66,6 @@ type MessageStats struct {
 	MediaShared int64 `json:"mediaShared"`
 }
 
-type EmergencyStats struct {
-	Total           int64   `json:"total"`
-	Active          int64   `json:"active"`
-	ResolvedToday   int64   `json:"resolvedToday"`
-	FalseAlarms     int64   `json:"falseAlarms"`
-	AvgResponseTime float64 `json:"avgResponseTime"`
-}
 
 // Error Response Codes
 const (

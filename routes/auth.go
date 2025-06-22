@@ -4,13 +4,14 @@ package routes
 import (
 	"ftrack/controllers"
 	"ftrack/middleware"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 )
 
 // SetupAuthRoutes configures authentication-related routes
-func SetupAuthRoutes(router *gin.RouterGroup, authController *controllers.AuthController) {
+func SetupAuthRoutes(router *gin.RouterGroup, authController *controllers.AuthController, authMiddleware *middleware.AuthMiddleware) {
 	auth := router.Group("/auth")
 
 	// Public authentication endpoints
@@ -38,7 +39,7 @@ func SetupAuthRoutes(router *gin.RouterGroup, authController *controllers.AuthCo
 
 	// Protected authentication endpoints (require valid token)
 	protected := auth.Group("/")
-	protected.Use(middleware.AuthMiddleware())
+	protected.Use(authMiddleware.RequireAuth()) // ✅ Now authMiddleware is available
 	{
 		// Current user token operations
 		protected.POST("/validate", authController.ValidateToken)
@@ -64,14 +65,14 @@ func SetupAuthRoutes(router *gin.RouterGroup, authController *controllers.AuthCo
 	}
 }
 
-// SetupAuthMiddleware configures authentication middleware for specific route groups
+// In routes/auth.go
 func SetupAuthMiddleware(router *gin.RouterGroup, redis *redis.Client) {
 	// Rate limiting for authentication endpoints
 	router.Use(middleware.AuthRateLimit(redis))
 
 	// Additional security for sensitive auth operations
 	sensitiveOps := router.Group("/")
-	sensitiveOps.Use(middleware.StrictRateLimit(redis, 3, "5m")) // 3 attempts per 5 minutes
+	sensitiveOps.Use(middleware.CustomRateLimit(redis, 3, 5*time.Minute, middleware.StrategyIP, "strict_auth")) // ✅ Use CustomRateLimit
 	{
 		sensitiveOps.POST("/forgot-password")
 		sensitiveOps.POST("/reset-password")

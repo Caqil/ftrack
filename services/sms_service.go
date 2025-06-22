@@ -177,7 +177,7 @@ func (sms *TwilioSMSService) sendEmergencySMS(phone, message string) error {
 
 	if !result.Success {
 		logrus.Errorf("Emergency SMS failed to %s: %s", phone, result.Error)
-		return fmt.Errorf("Emergency SMS sending failed: %s", result.Error)
+		return fmt.Errorf("emergency SMS sending failed: %s", result.Error)
 	}
 
 	logrus.Infof("🚨 Emergency SMS sent successfully to %s (MessageID: %s)", phone, result.MessageID)

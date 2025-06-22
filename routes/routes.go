@@ -79,7 +79,7 @@ func initializeServices(repos *Repositories, redis *redis.Client, hub *websocket
 
 	return &Services{
 		Auth:         authService,
-		User:         services.NewUserService(repos.User, authService),
+		User:         services.NewUserService(repos.User),
 		Circle:       services.NewCircleService(repos.Circle, repos.User),
 		Message:      services.NewMessageService(repos.Message, repos.Circle, repos.User, hub),
 		Emergency:    services.NewEmergencyService(repos.Emergency, repos.Circle, repos.User, notificationService, hub),
@@ -158,7 +158,7 @@ func setupPublicRoutes(router *gin.Engine, controllers *Controllers) {
 // Authenticated routes (requires valid JWT token)
 func setupAuthenticatedRoutes(router *gin.Engine, controllers *Controllers, redis *redis.Client) {
 	api := router.Group("/api/v1")
-	api.Use(middleware.AuthMiddleware())
+	api.Use(authMiddleware.RequireAuth())
 	api.Use(middleware.APIRateLimit(redis))
 
 	// Setup all authenticated route groups

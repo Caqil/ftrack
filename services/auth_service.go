@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"ftrack/interfaces"
 	"ftrack/models"
 	"ftrack/repositories"
-	"ftrack/services"
 	"ftrack/utils"
 	"math/big"
 	"net/url"
@@ -28,7 +28,7 @@ type AuthService struct {
 	jwtService      *utils.JWTService
 	passwordService *utils.PasswordService
 	emailService    EmailService // Using existing EmailService interface
-	smsService      *services.SMSService
+	smsService      *interfaces.SMSService
 	validator       *utils.ValidationService
 	redis           *redis.Client
 	config          *models.AuthConfig
@@ -39,7 +39,7 @@ func NewAuthService(
 	sessionRepo *repositories.UserSessionRepository,
 	jwtService *utils.JWTService,
 	emailService EmailService, // Using existing EmailService interface
-	smsService *services.SMSService,
+	smsService *interfaces.SMSService,
 	redis *redis.Client,
 	config *models.AuthConfig,
 ) *AuthService {
