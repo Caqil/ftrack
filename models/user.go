@@ -290,3 +290,246 @@ type UserStatistics struct {
 	OnlineUsers   int64            `json:"onlineUsers" bson:"onlineUsers"`
 	UsersByRole   map[string]int64 `json:"usersByRole" bson:"usersByRole"`
 }
+
+type FriendRequestSend struct {
+	Message string `json:"message,omitempty" validate:"max=500"`
+}
+
+type Friendship struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	User1ID   primitive.ObjectID `json:"user1Id" bson:"user1Id"`
+	User2ID   primitive.ObjectID `json:"user2Id" bson:"user2Id"`
+	Status    string             `json:"status" bson:"status"` // active, blocked
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+// =============================================
+// BLOCKING AND REPORTING MODELS
+// =============================================
+
+type BlockUserRequest struct {
+	Reason string `json:"reason,omitempty" validate:"max=500"`
+}
+
+type ReportUserRequest struct {
+	Reason      string `json:"reason" validate:"required,oneof=spam harassment inappropriate fake_profile other"`
+	Description string `json:"description,omitempty" validate:"max=1000"`
+}
+
+// =============================================
+// DATA EXPORT AND PRIVACY MODELS
+// =============================================
+
+type ExportUserDataRequest struct {
+	DataTypes []string `json:"dataTypes" validate:"required,min=1"`
+	Format    string   `json:"format,omitempty" validate:"oneof=json csv zip" default:"zip"`
+}
+
+type ExportFile struct {
+	Data        []byte `json:"-"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+}
+
+// =============================================
+// STATISTICS RESPONSE MODELS
+// =============================================
+
+type DrivingStatsResponse struct {
+	TotalTrips      int     `json:"totalTrips"`
+	TotalDistance   float64 `json:"totalDistance"`   // km
+	TotalTime       int64   `json:"totalTime"`       // seconds
+	AverageSpeed    float64 `json:"averageSpeed"`    // km/h
+	MaxSpeed        float64 `json:"maxSpeed"`        // km/h
+	SafetyScore     int     `json:"safetyScore"`     // 0-100
+	HardBraking     int     `json:"hardBraking"`     // count
+	RapidAccel      int     `json:"rapidAccel"`      // count
+	Speeding        int     `json:"speeding"`        // count
+	PhoneUsage      int     `json:"phoneUsage"`      // count
+	NightDriving    float64 `json:"nightDriving"`    // percentage
+	HighwayDriving  float64 `json:"highwayDriving"`  // percentage
+	CityDriving     float64 `json:"cityDriving"`     // percentage
+	RuralDriving    float64 `json:"ruralDriving"`    // percentage
+}
+
+type CircleStatsResponse struct {
+	TotalCircles     int                `json:"totalCircles"`
+	ActiveCircles    int                `json:"activeCircles"`
+	CirclesCreated   int                `json:"circlesCreated"`
+	CirclesJoined    int                `json:"circlesJoined"`
+	TotalMembers     int                `json:"totalMembers"`
+	MessagesShared   int                `json:"messagesShared"`
+	LocationShares   int                `json:"locationShares"`
+	EmergencyAlerts  int                `json:"emergencyAlerts"`
+	MostActiveCircle CircleStat         `json:"mostActiveCircle"`
+	RecentActivity   []CircleActivity   `json:"recentActivity"`
+}
+
+
+// =============================================
+// UTILITY RESPONSE MODELS
+// =============================================
+
+type AcceptedResponse struct {
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+type ConflictResponse struct {
+	Message string `json:"message"`
+	Error   string `json:"error"`
+}
+
+type CreatedResponse struct {
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
+// =============================================
+// EXISTING MODELS EXTENSIONS
+// =============================================
+
+// Add these fields to your existing QuietHours model if not already present
+type QuietHoursExtended struct {
+	Enabled   bool              `json:"enabled" bson:"enabled"`
+	StartTime string            `json:"startTime" bson:"startTime"` // HH:MM format
+	EndTime   string            `json:"endTime" bson:"endTime"`     // HH:MM format
+	Timezone  string            `json:"timezone" bson:"timezone"`
+	Days      []string          `json:"days" bson:"days"` // monday, tuesday, etc.
+	Exceptions []QuietException `json:"exceptions" bson:"exceptions"`
+}
+
+type QuietException struct {
+	Date   string `json:"date" bson:"date"` // YYYY-MM-DD format
+	Reason string `json:"reason" bson:"reason"`
+}
+
+// Device Token Update Request
+type DeviceTokenUpdateRequest struct {
+	DeviceToken string `json:"deviceToken" validate:"required"`
+	DeviceType  string `json:"deviceType" validate:"required,oneof=ios android web"`
+}
+
+// Online Status Update Request
+type OnlineStatusRequest struct {
+	IsOnline bool `json:"isOnline"`
+}
+
+// Batch User Request
+type BatchUserRequest struct {
+	UserIDs []string `json:"userIds" validate:"required,min=1,max=100"`
+}
+
+// Account Deactivation Request
+type AccountDeactivationRequest struct {
+	Reason   string `json:"reason" validate:"required"`
+	Password string `json:"password" validate:"required"`
+}
+
+// Search Users Advanced Request
+type SearchUsersAdvancedRequest struct {
+	Query       string   `json:"query" validate:"required,min=2"`
+	Limit       int      `json:"limit" validate:"min=1,max=50"`
+	Filters     Filters  `json:"filters,omitempty"`
+	SortBy      string   `json:"sortBy,omitempty" validate:"oneof=name relevance recent"`
+	CircleID    string   `json:"circleId,omitempty"`
+	ExcludeIDs  []string `json:"excludeIds,omitempty"`
+}
+
+type Filters struct {
+	Location       LocationFilter `json:"location,omitempty"`
+	IsOnline       *bool          `json:"isOnline,omitempty"`
+	HasProfilePic  *bool          `json:"hasProfilePic,omitempty"`
+	MutualFriends  *bool          `json:"mutualFriends,omitempty"`
+	InSameCircles  *bool          `json:"inSameCircles,omitempty"`
+}
+
+type LocationFilter struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Radius    float64 `json:"radius"` // km
+}
+
+// User Activity Log
+type UserActivityLog struct {
+	ID        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	UserID    primitive.ObjectID `json:"userId" bson:"userId"`
+	Action    string             `json:"action" bson:"action"`
+	Resource  string             `json:"resource" bson:"resource"`
+	Details   map[string]interface{} `json:"details" bson:"details"`
+	IPAddress string             `json:"ipAddress" bson:"ipAddress"`
+	UserAgent string             `json:"userAgent" bson:"userAgent"`
+	CreatedAt time.Time          `json:"createdAt" bson:"createdAt"`
+}
+
+
+type DeviceInfo struct {
+	Platform    string `json:"platform" bson:"platform"`       // ios, android, web
+	Version     string `json:"version" bson:"version"`         // app version
+	OS          string `json:"os" bson:"os"`                   // iOS 15.0, Android 11
+	DeviceModel string `json:"deviceModel" bson:"deviceModel"` // iPhone 13, Samsung Galaxy S21
+	Browser     string `json:"browser,omitempty" bson:"browser,omitempty"` // for web
+}
+
+// User Preferences Extended
+type UserPreferencesExtended struct {
+	UserPreferences `bson:",inline"`
+	
+	// Additional preferences
+	DataSaver     bool              `json:"dataSaver" bson:"dataSaver"`
+	HighContrast  bool              `json:"highContrast" bson:"highContrast"`
+	FontSize      string            `json:"fontSize" bson:"fontSize"` // small, medium, large
+	AutoUpdate    bool              `json:"autoUpdate" bson:"autoUpdate"`
+	Analytics     bool              `json:"analytics" bson:"analytics"`
+	Experimental  bool              `json:"experimental" bson:"experimental"`
+	BackupSettings BackupSettings   `json:"backupSettings" bson:"backupSettings"`
+	SyncSettings   SyncSettings     `json:"syncSettings" bson:"syncSettings"`
+}
+
+type BackupSettings struct {
+	Enabled   bool     `json:"enabled" bson:"enabled"`
+	Frequency string   `json:"frequency" bson:"frequency"` // daily, weekly, monthly
+	Include   []string `json:"include" bson:"include"`     // data types to backup
+	AutoClean bool     `json:"autoClean" bson:"autoClean"`
+}
+
+type SyncSettings struct {
+	Enabled    bool     `json:"enabled" bson:"enabled"`
+	WiFiOnly   bool     `json:"wifiOnly" bson:"wifiOnly"`
+	Include    []string `json:"include" bson:"include"`
+	Frequency  string   `json:"frequency" bson:"frequency"` // realtime, hourly, daily
+}
+
+// User Verification
+type UserVerification struct {
+	ID            primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	UserID        primitive.ObjectID `json:"userId" bson:"userId"`
+	Type          string             `json:"type" bson:"type"` // email, phone, identity
+	Status        string             `json:"status" bson:"status"` // pending, verified, failed
+	Code          string             `json:"code,omitempty" bson:"code,omitempty"`
+	Token         string             `json:"token,omitempty" bson:"token,omitempty"`
+	Attempts      int                `json:"attempts" bson:"attempts"`
+	MaxAttempts   int                `json:"maxAttempts" bson:"maxAttempts"`
+	ExpiresAt     time.Time          `json:"expiresAt" bson:"expiresAt"`
+	VerifiedAt    *time.Time         `json:"verifiedAt,omitempty" bson:"verifiedAt,omitempty"`
+	CreatedAt     time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time          `json:"updatedAt" bson:"updatedAt"`
+}
+
+// Rate Limiting
+type RateLimit struct {
+	UserID      string    `json:"userId"`
+	Action      string    `json:"action"`
+	Count       int       `json:"count"`
+	WindowStart time.Time `json:"windowStart"`
+	WindowEnd   time.Time `json:"windowEnd"`
+}
+
+// Feature Flags
+type UserFeatureFlags struct {
+	UserID   primitive.ObjectID    `json:"userId" bson:"userId"`
+	Flags    map[string]bool       `json:"flags" bson:"flags"`
+	Metadata map[string]interface{} `json:"metadata" bson:"metadata"`
+	UpdatedAt time.Time            `json:"updatedAt" bson:"updatedAt"`
+}

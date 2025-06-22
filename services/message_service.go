@@ -1420,7 +1420,7 @@ func (ms *MessageService) ExportCircleMessages(ctx context.Context, userID, circ
 }
 
 func (ms *MessageService) GetExportStatus(ctx context.Context, userID, exportID string) (*models.ExportStatusResponse, error) {
-	export, err := ms.exportRepo.GetByID(ctx, exportID)
+	export, err := ms.exportRepo.GetExport(ctx, exportID)
 	if err != nil {
 		return nil, err
 	}

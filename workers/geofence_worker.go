@@ -587,7 +587,7 @@ func (gw *GeofenceWorker) getUserPlaces(ctx context.Context, userID string) ([]m
 	gw.incrementCacheMisses()
 
 	// Fetch from database
-	places, err := gw.placeRepo.GetUserPlaces(ctx, userID)
+	places, _, err := gw.placeRepo.GetUserPlaces(ctx, userID, models.GetPlacesRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -719,16 +719,23 @@ func StartGeofenceWorker(db *mongo.Database, redis *redis.Client, hub *websocket
 	notificationRepo := repositories.NewNotificationRepository(db)
 
 	circleService := services.NewCircleService(circleRepo, userRepo)
-	placeService := services.NewPlaceService(placeRepo, circleRepo, userRepo)
+	placeService := services.NewPlaceService(placeRepo, circleRepo)
 	geofenceService := services.NewGeofenceService(placeRepo, locationRepo, hub)
 
 	// Initialize push service for notifications
-	pushService, err := services.NewPushService("", "", "", "")
-	if err != nil {
-		logrus.Errorf("Failed to initialize push service: %v", err)
-	}
+	pushService := services.NewPushService(nil, notificationRepo)
 
-	notificationService := services.NewNotificationService(notificationRepo, userRepo, pushService)
+	// Provide nil for EmailService and SMSService if not available, or initialize as needed
+	notificationService := services.NewNotificationService(
+		notificationRepo,
+		userRepo,
+		circleRepo,
+		redis,
+		hub,
+		nil, // EmailService
+		nil, // SMSService
+		pushService,
+	)
 
 	worker := NewGeofenceWorker(db, redis, hub, geofenceService, placeService, circleService, notificationService)
 

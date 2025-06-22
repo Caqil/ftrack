@@ -465,8 +465,6 @@ func (pc *PlaceController) CreateAutomationRule(c *gin.Context) {
 	utils.CreatedResponse(c, "Automation rule created successfully", rule)
 }
 
-// ==================== STUB METHODS FOR REMAINING FEATURES ====================
-// These provide basic responses and can be expanded as needed
 
 func (pc *PlaceController) UpdatePlaceCategory(c *gin.Context) {
 	utils.SuccessResponse(c, "Category update feature coming soon", nil)

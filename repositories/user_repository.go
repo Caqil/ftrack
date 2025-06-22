@@ -1,10 +1,14 @@
+// COMPLETE USER REPOSITORY
+// Add these methods to your repositories/user_repository.go file
+
 package repositories
 
 import (
 	"context"
 	"errors"
-	"ftrack/models"
 	"time"
+
+	"ftrack/models"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -13,28 +17,32 @@ import (
 )
 
 type UserRepository struct {
+	db         *mongo.Database
 	collection *mongo.Collection
 }
 
 func NewUserRepository(db *mongo.Database) *UserRepository {
 	return &UserRepository{
+		db:         db,
 		collection: db.Collection("users"),
 	}
 }
+
+// =============================================
+// BASIC CRUD OPERATIONS
+// =============================================
 
 func (ur *UserRepository) Create(ctx context.Context, user *models.User) error {
 	user.ID = primitive.NewObjectID()
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
-	user.IsActive = true
-	user.IsOnline = false
 
 	_, err := ur.collection.InsertOne(ctx, user)
 	return err
 }
 
-func (ur *UserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
-	objectID, err := primitive.ObjectIDFromHex(id)
+func (ur *UserRepository) GetByID(ctx context.Context, userID string) (*models.User, error) {
+	objectID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil, errors.New("invalid user ID")
 	}
@@ -66,7 +74,7 @@ func (ur *UserRepository) GetByEmail(ctx context.Context, email string) (*models
 
 func (ur *UserRepository) GetByPhone(ctx context.Context, phone string) (*models.User, error) {
 	var user models.User
-	err := ur.collection.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
+	err := ur.collection.FindOne(ctx, bson.M{"phoneNumber": phone}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, errors.New("user not found")
@@ -77,8 +85,37 @@ func (ur *UserRepository) GetByPhone(ctx context.Context, phone string) (*models
 	return &user, nil
 }
 
-func (ur *UserRepository) Update(ctx context.Context, id string, update bson.M) error {
-	objectID, err := primitive.ObjectIDFromHex(id)
+func (ur *UserRepository) GetByVerificationToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+	err := ur.collection.FindOne(ctx, bson.M{"verificationToken": token}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (ur *UserRepository) GetByResetToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+	err := ur.collection.FindOne(ctx, bson.M{
+		"resetToken":     token,
+		"resetExpiresAt": bson.M{"$gt": time.Now()},
+	}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("user not found or token expired")
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (ur *UserRepository) Update(ctx context.Context, userID string, update bson.M) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return errors.New("invalid user ID")
 	}
@@ -102,38 +139,19 @@ func (ur *UserRepository) Update(ctx context.Context, id string, update bson.M) 
 	return nil
 }
 
-func (ur *UserRepository) UpdateLastSeen(ctx context.Context, id string) error {
-	objectID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
+// =============================================
+// AUTHENTICATION AND SECURITY OPERATIONS
+// =============================================
 
-	_, err = ur.collection.UpdateOne(
-		ctx,
-		bson.M{"_id": objectID},
-		bson.M{"$set": bson.M{
-			"lastSeen":  time.Now(),
-			"isOnline":  true,
-			"updatedAt": time.Now(),
-		}},
-	)
-
-	return err
-}
-
-func (ur *UserRepository) UpdateOnlineStatus(ctx context.Context, id string, isOnline bool) error {
-	objectID, err := primitive.ObjectIDFromHex(id)
+func (ur *UserRepository) UpdateLastSeen(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return errors.New("invalid user ID")
 	}
 
 	update := bson.M{
-		"isOnline":  isOnline,
+		"lastSeen":  time.Now(),
 		"updatedAt": time.Now(),
-	}
-
-	if !isOnline {
-		update["lastSeen"] = time.Now()
 	}
 
 	_, err = ur.collection.UpdateOne(
@@ -145,8 +163,322 @@ func (ur *UserRepository) UpdateOnlineStatus(ctx context.Context, id string, isO
 	return err
 }
 
-func (ur *UserRepository) Delete(ctx context.Context, id string) error {
-	objectID, err := primitive.ObjectIDFromHex(id)
+func (ur *UserRepository) SetOffline(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"isOnline":  false,
+		"lastSeen":  time.Now(),
+		"updatedAt": time.Now(),
+	}
+
+	_, err = ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	return err
+}
+
+func (ur *UserRepository) IsAccountLocked(ctx context.Context, userID string) (bool, error) {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return false, errors.New("invalid user ID")
+	}
+
+	var user models.User
+	err = ur.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
+	if err != nil {
+		return false, err
+	}
+
+	// Check if account is locked and lock hasn't expired
+	if !user.LockedUntil.IsZero() && user.LockedUntil.After(time.Now()) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (ur *UserRepository) LockAccount(ctx context.Context, userID string, duration time.Duration) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	lockUntil := time.Now().Add(duration)
+	update := bson.M{
+		"lockedUntil": lockUntil,
+		"updatedAt":   time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) UnlockAccount(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"$unset": bson.M{"lockedUntil": ""},
+		"$set": bson.M{
+			"loginAttempts": 0,
+			"updatedAt":     time.Now(),
+		},
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) IncrementLoginAttempts(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"$inc": bson.M{"loginAttempts": 1},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) ResetLoginAttempts(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"loginAttempts": 0,
+		"updatedAt":     time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) SetVerificationToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"verificationToken":     token,
+		"verificationExpiresAt": expiresAt,
+		"updatedAt":             time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) ClearVerificationToken(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"$unset": bson.M{
+			"verificationToken":     "",
+			"verificationExpiresAt": "",
+		},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) SetResetToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"resetToken":     token,
+		"resetExpiresAt": expiresAt,
+		"updatedAt":      time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) ClearResetToken(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"$unset": bson.M{
+			"resetToken":     "",
+			"resetExpiresAt": "",
+		},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"password":      hashedPassword,
+			"passwordHash":  hashedPassword, // Alternative field name if used
+			"loginAttempts": 0,              // Reset login attempts on password change
+			"updatedAt":     time.Now(),
+		},
+		"$unset": bson.M{
+			"resetToken":     "",
+			"resetExpiresAt": "",
+			"lockedUntil":    "",
+		},
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) Delete(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return errors.New("invalid user ID")
 	}
@@ -163,38 +495,29 @@ func (ur *UserRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (ur *UserRepository) GetUsersByIDs(ctx context.Context, ids []string) ([]models.User, error) {
-	objectIDs := make([]primitive.ObjectID, len(ids))
-	for i, id := range ids {
-		objectID, err := primitive.ObjectIDFromHex(id)
-		if err != nil {
-			continue
-		}
-		objectIDs[i] = objectID
-	}
-
-	cursor, err := ur.collection.Find(ctx, bson.M{"_id": bson.M{"$in": objectIDs}})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var users []models.User
-	err = cursor.All(ctx, &users)
-	return users, err
-}
+// =============================================
+// SEARCH AND QUERY OPERATIONS
+// =============================================
 
 func (ur *UserRepository) SearchUsers(ctx context.Context, query string, limit int) ([]models.User, error) {
 	filter := bson.M{
-		"$or": []bson.M{
-			{"firstName": bson.M{"$regex": query, "$options": "i"}},
-			{"lastName": bson.M{"$regex": query, "$options": "i"}},
-			{"email": bson.M{"$regex": query, "$options": "i"}},
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"firstName": bson.M{"$regex": query, "$options": "i"}},
+					{"lastName": bson.M{"$regex": query, "$options": "i"}},
+					{"email": bson.M{"$regex": query, "$options": "i"}},
+				},
+			},
+			{"isActive": true},
+			{"preferences.privacy.showInDirectory": true},
 		},
-		"isActive": true,
 	}
 
-	opts := options.Find().SetLimit(int64(limit))
+	opts := options.Find().
+		SetLimit(int64(limit)).
+		SetSort(bson.D{{"firstName", 1}, {"lastName", 1}})
+
 	cursor, err := ur.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err
@@ -203,413 +526,96 @@ func (ur *UserRepository) SearchUsers(ctx context.Context, query string, limit i
 
 	var users []models.User
 	err = cursor.All(ctx, &users)
-	return users, err
-}
-
-func (ur *UserRepository) UpdateDeviceToken(ctx context.Context, userID, deviceToken, deviceType string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	_, err = ur.collection.UpdateOne(
-		ctx,
-		bson.M{"_id": objectID},
-		bson.M{"$set": bson.M{
-			"deviceToken": deviceToken,
-			"deviceType":  deviceType,
-			"updatedAt":   time.Now(),
-		}},
-	)
-
-	return err
-}
-
-// GetByResetToken gets user by password reset token
-func (ur *UserRepository) GetByResetToken(ctx context.Context, token string) (*models.User, error) {
-	var user models.User
-
-	// Check if token exists and is not expired
-	filter := bson.M{
-		"resetToken":        token,
-		"resetTokenExpires": bson.M{"$gt": time.Now()}, // Token not expired
-	}
-
-	err := ur.collection.FindOne(ctx, filter).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("invalid or expired token")
-		}
 		return nil, err
 	}
 
-	return &user, nil
+	return users, nil
 }
 
-// GetByVerificationToken gets user by email verification token
-func (ur *UserRepository) GetByVerificationToken(ctx context.Context, token string) (*models.User, error) {
-	var user models.User
-
-	// Check if token exists and is not expired
+func (ur *UserRepository) SearchUsersAdvanced(ctx context.Context, req models.SearchUsersAdvancedRequest) ([]models.User, error) {
 	filter := bson.M{
-		"verificationToken":        token,
-		"verificationTokenExpires": bson.M{"$gt": time.Now()}, // Token not expired
+		"isActive":                            true,
+		"preferences.privacy.showInDirectory": true,
 	}
 
-	err := ur.collection.FindOne(ctx, filter).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("invalid or expired token")
+	// Add text search
+	if req.Query != "" {
+		filter["$or"] = []bson.M{
+			{"firstName": bson.M{"$regex": req.Query, "$options": "i"}},
+			{"lastName": bson.M{"$regex": req.Query, "$options": "i"}},
+			{"email": bson.M{"$regex": req.Query, "$options": "i"}},
 		}
+	}
+
+	// Add filters
+	if req.Filters.IsOnline != nil {
+		filter["isOnline"] = *req.Filters.IsOnline
+	}
+
+	if req.Filters.HasProfilePic != nil {
+		if *req.Filters.HasProfilePic {
+			filter["profilePicture"] = bson.M{"$ne": ""}
+		} else {
+			filter["profilePicture"] = ""
+		}
+	}
+
+	// Exclude specific user IDs
+	if len(req.ExcludeIDs) > 0 {
+		excludeObjectIDs := make([]primitive.ObjectID, 0, len(req.ExcludeIDs))
+		for _, id := range req.ExcludeIDs {
+			if objectID, err := primitive.ObjectIDFromHex(id); err == nil {
+				excludeObjectIDs = append(excludeObjectIDs, objectID)
+			}
+		}
+		if len(excludeObjectIDs) > 0 {
+			filter["_id"] = bson.M{"$nin": excludeObjectIDs}
+		}
+	}
+
+	// Set up options
+	opts := options.Find().SetLimit(int64(req.Limit))
+
+	// Add sorting
+	switch req.SortBy {
+	case "name":
+		opts.SetSort(bson.D{{"firstName", 1}, {"lastName", 1}})
+	case "recent":
+		opts.SetSort(bson.D{{"createdAt", -1}})
+	default: // relevance
+		opts.SetSort(bson.D{{"firstName", 1}})
+	}
+
+	cursor, err := ur.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []models.User
+	err = cursor.All(ctx, &users)
+	if err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return users, nil
 }
 
-func (ur *UserRepository) SetOffline(ctx context.Context, userID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"isOnline":  false,
-			"updatedAt": time.Now(),
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) UpdateVerificationStatus(ctx context.Context, userID string, isVerified bool) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"isVerified": isVerified,
-			"updatedAt":  time.Now(),
-		},
-	}
-
-	if isVerified {
-		update["$unset"] = bson.M{
-			"verificationToken": "",
-			"tokenExpiresAt":    "",
+func (ur *UserRepository) GetUsersByIDs(ctx context.Context, userIDs []string) ([]models.User, error) {
+	objectIDs := make([]primitive.ObjectID, 0, len(userIDs))
+	for _, id := range userIDs {
+		if objectID, err := primitive.ObjectIDFromHex(id); err == nil {
+			objectIDs = append(objectIDs, objectID)
 		}
 	}
 
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) Enable2FA(ctx context.Context, userID, secret string, backupCodes []string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
+	if len(objectIDs) == 0 {
+		return []models.User{}, nil
 	}
 
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"twoFactorEnabled": true,
-			"twoFactorSecret":  secret,
-			"backupCodes":      backupCodes,
-			"updatedAt":        time.Now(),
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) Disable2FA(ctx context.Context, userID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"twoFactorEnabled": false,
-			"twoFactorSecret":  "",
-			"backupCodes":      []string{},
-			"updatedAt":        time.Now(),
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) UpdateBackupCodes(ctx context.Context, userID string, backupCodes []string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"backupCodes": backupCodes,
-			"updatedAt":   time.Now(),
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"password":  hashedPassword,
-			"updatedAt": time.Now(),
-		},
-		"$unset": bson.M{
-			"resetToken":     "",
-			"tokenExpiresAt": "",
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) IncrementLoginAttempts(ctx context.Context, userID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$inc": bson.M{"loginAttempts": 1},
-		"$set": bson.M{"updatedAt": time.Now()},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) ResetLoginAttempts(ctx context.Context, userID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"loginAttempts": 0,
-			"updatedAt":     time.Now(),
-		},
-		"$unset": bson.M{"lockedUntil": ""},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) LockAccount(ctx context.Context, userID string, lockDuration time.Duration) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"lockedUntil": time.Now().Add(lockDuration),
-			"updatedAt":   time.Now(),
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) UnlockAccount(ctx context.Context, userID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"loginAttempts": 0,
-			"updatedAt":     time.Now(),
-		},
-		"$unset": bson.M{"lockedUntil": ""},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-func (ur *UserRepository) IsAccountLocked(ctx context.Context, userID string) (bool, error) {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return false, errors.New("invalid user ID")
-	}
-
-	var user models.User
-	filter := bson.M{"_id": objectID}
-	err = ur.collection.FindOne(ctx, filter).Decode(&user)
-	if err != nil {
-		return false, err
-	}
-
-	if !user.LockedUntil.IsZero() && time.Now().Before(user.LockedUntil) {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (ur *UserRepository) GetByAuthProvider(ctx context.Context, provider, providerID string) (*models.User, error) {
-	var user models.User
 	filter := bson.M{
-		"authProvider":   provider,
-		"authProviderId": providerID,
-	}
-
-	err := ur.collection.FindOne(ctx, filter).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("user not found")
-		}
-		return nil, err
-	}
-
-	return &user, nil
-}
-
-func (ur *UserRepository) UpdateOAuthInfo(ctx context.Context, userID, provider, providerID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"authProvider":   provider,
-			"authProviderId": providerID,
-			"updatedAt":      time.Now(),
-		},
-	}
-
-	_, err = ur.collection.UpdateOne(ctx, filter, update)
-	return err
-}
-
-// Add these methods to your existing repositories/user_repository.go file
-
-// IsAdmin checks if a user has admin privileges
-func (ur *UserRepository) IsAdmin(ctx context.Context, userID string) (bool, error) {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return false, errors.New("invalid user ID")
-	}
-
-	var user models.User
-	err = ur.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return false, errors.New("user not found")
-		}
-		return false, err
-	}
-
-	// Check if user has admin role
-	return user.Role == "admin" || user.Role == "superadmin", nil
-}
-
-// GetUserRole gets the role of a user
-func (ur *UserRepository) GetUserRole(ctx context.Context, userID string) (string, error) {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return "", errors.New("invalid user ID")
-	}
-
-	var user models.User
-	err = ur.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return "", errors.New("user not found")
-		}
-		return "", err
-	}
-
-	return user.Role, nil
-}
-
-// UpdateUserRole updates a user's role (admin only)
-func (ur *UserRepository) UpdateUserRole(ctx context.Context, userID, newRole string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return errors.New("invalid user ID")
-	}
-
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"role":      newRole,
-			"updatedAt": time.Now(),
-		},
-	}
-
-	result, err := ur.collection.UpdateOne(ctx, filter, update)
-	if err != nil {
-		return err
-	}
-
-	if result.MatchedCount == 0 {
-		return errors.New("user not found")
-	}
-
-	return nil
-}
-
-// IsSuperAdmin checks if a user has super admin privileges
-func (ur *UserRepository) IsSuperAdmin(ctx context.Context, userID string) (bool, error) {
-	objectID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return false, errors.New("invalid user ID")
-	}
-
-	var user models.User
-	err = ur.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return false, errors.New("user not found")
-		}
-		return false, err
-	}
-
-	return user.Role == "superadmin", nil
-}
-
-// GetAdminUsers gets all users with admin privileges
-func (ur *UserRepository) GetAdminUsers(ctx context.Context) ([]models.User, error) {
-	filter := bson.M{
-		"role":     bson.M{"$in": []string{"admin", "superadmin"}},
+		"_id":      bson.M{"$in": objectIDs},
 		"isActive": true,
 	}
 
@@ -621,69 +627,332 @@ func (ur *UserRepository) GetAdminUsers(ctx context.Context) ([]models.User, err
 
 	var users []models.User
 	err = cursor.All(ctx, &users)
-	return users, err
-}
-
-// HasPermission checks if a user has a specific permission
-func (ur *UserRepository) HasPermission(ctx context.Context, userID, permission string) (bool, error) {
-	user, err := ur.GetByID(ctx, userID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	// Check role-based permissions
-	switch user.Role {
-	case "superadmin":
-		return true, nil // Super admin has all permissions
-	case "admin":
-		// Admin has most permissions except super admin specific ones
-		adminPermissions := map[string]bool{
-			"send_notifications": true,
-			"manage_users":       true,
-			"view_analytics":     true,
-			"manage_circles":     true,
-			"moderate_content":   true,
-			"export_data":        true,
-			"manage_settings":    true,
-		}
-		return adminPermissions[permission], nil
-	case "moderator":
-		// Moderator has limited permissions
-		moderatorPermissions := map[string]bool{
-			"moderate_content":     true,
-			"view_basic_analytics": true,
-		}
-		return moderatorPermissions[permission], nil
-	default:
-		return false, nil // Regular users have no admin permissions
-	}
+	return users, nil
 }
 
-// SetUserRole sets a user's role with validation
-func (ur *UserRepository) SetUserRole(ctx context.Context, userID, role string) error {
-	// Validate role
-	validRoles := map[string]bool{
-		"user":       true,
-		"moderator":  true,
-		"admin":      true,
-		"superadmin": true,
-	}
+// =============================================
+// DEVICE AND STATUS OPERATIONS
+// =============================================
 
-	if !validRoles[role] {
-		return errors.New("invalid role")
-	}
-
-	return ur.UpdateUserRole(ctx, userID, role)
-}
-
-// DeactivateUser deactivates a user account (admin only)
-func (ur *UserRepository) DeactivateUser(ctx context.Context, userID string) error {
+func (ur *UserRepository) UpdateDeviceToken(ctx context.Context, userID, deviceToken, deviceType string) error {
 	objectID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return errors.New("invalid user ID")
 	}
 
-	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"deviceToken": deviceToken,
+		"deviceType":  deviceType,
+		"updatedAt":   time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) UpdateOnlineStatus(ctx context.Context, userID string, isOnline bool) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"isOnline":  isOnline,
+		"lastSeen":  time.Now(),
+		"updatedAt": time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) UpdateLastActivity(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"lastActivity": time.Now(),
+		"updatedAt":    time.Now(),
+	}
+
+	_, err = ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	return err
+}
+
+// =============================================
+// VERIFICATION OPERATIONS
+// =============================================
+
+func (ur *UserRepository) MarkEmailVerified(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"isVerified": true,
+		"verifiedAt": time.Now(),
+		"updatedAt":  time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) MarkPhoneVerified(ctx context.Context, userID string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"phoneVerified": true,
+		"updatedAt":     time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+// =============================================
+// STATISTICS AND ANALYTICS
+// =============================================
+
+func (ur *UserRepository) GetUserCount(ctx context.Context) (int64, error) {
+	return ur.collection.CountDocuments(ctx, bson.M{"isActive": true})
+}
+
+func (ur *UserRepository) GetOnlineUserCount(ctx context.Context) (int64, error) {
+	return ur.collection.CountDocuments(ctx, bson.M{
+		"isActive": true,
+		"isOnline": true,
+	})
+}
+
+func (ur *UserRepository) GetVerifiedUserCount(ctx context.Context) (int64, error) {
+	return ur.collection.CountDocuments(ctx, bson.M{
+		"isActive":   true,
+		"isVerified": true,
+	})
+}
+
+func (ur *UserRepository) GetNewUsersCount(ctx context.Context, since time.Time) (int64, error) {
+	return ur.collection.CountDocuments(ctx, bson.M{
+		"isActive":  true,
+		"createdAt": bson.M{"$gte": since},
+	})
+}
+
+func (ur *UserRepository) GetActiveUsersCount(ctx context.Context, since time.Time) (int64, error) {
+	return ur.collection.CountDocuments(ctx, bson.M{
+		"isActive":     true,
+		"lastActivity": bson.M{"$gte": since},
+	})
+}
+
+// =============================================
+// BULK OPERATIONS
+// =============================================
+
+func (ur *UserRepository) BulkUpdateUsers(ctx context.Context, userIDs []string, update bson.M) error {
+	objectIDs := make([]primitive.ObjectID, 0, len(userIDs))
+	for _, id := range userIDs {
+		if objectID, err := primitive.ObjectIDFromHex(id); err == nil {
+			objectIDs = append(objectIDs, objectID)
+		}
+	}
+
+	if len(objectIDs) == 0 {
+		return errors.New("no valid user IDs provided")
+	}
+
+	update["updatedAt"] = time.Now()
+
+	result, err := ur.collection.UpdateMany(
+		ctx,
+		bson.M{"_id": bson.M{"$in": objectIDs}},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("no users found")
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) BulkDeactivateUsers(ctx context.Context, userIDs []string) error {
+	return ur.BulkUpdateUsers(ctx, userIDs, bson.M{
+		"isActive":      false,
+		"deactivatedAt": time.Now(),
+	})
+}
+
+// =============================================
+// ADMIN OPERATIONS
+// =============================================
+
+func (ur *UserRepository) GetUsersPaginated(ctx context.Context, page, limit int, filter bson.M) ([]models.User, int64, error) {
+	if filter == nil {
+		filter = bson.M{}
+	}
+
+	// Get total count
+	total, err := ur.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Calculate skip
+	skip := (page - 1) * limit
+
+	// Get users
+	opts := options.Find().
+		SetSkip(int64(skip)).
+		SetLimit(int64(limit)).
+		SetSort(bson.D{{"createdAt", -1}})
+
+	cursor, err := ur.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []models.User
+	err = cursor.All(ctx, &users)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+func (ur *UserRepository) GetUsersByRole(ctx context.Context, role string) ([]models.User, error) {
+	filter := bson.M{
+		"role":     role,
+		"isActive": true,
+	}
+
+	cursor, err := ur.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []models.User
+	err = cursor.All(ctx, &users)
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (ur *UserRepository) UpdateUserRole(ctx context.Context, userID, role string) error {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	update := bson.M{
+		"role":      role,
+		"updatedAt": time.Now(),
+	}
+
+	result, err := ur.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		bson.M{"$set": update},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+// =============================================
+// CLEANUP AND MAINTENANCE
+// =============================================
+
+func (ur *UserRepository) CleanupInactiveUsers(ctx context.Context, inactiveSince time.Time) (int64, error) {
+	filter := bson.M{
+		"isActive":     true,
+		"lastActivity": bson.M{"$lt": inactiveSince},
+	}
+
 	update := bson.M{
 		"$set": bson.M{
 			"isActive":      false,
@@ -692,109 +961,93 @@ func (ur *UserRepository) DeactivateUser(ctx context.Context, userID string) err
 		},
 	}
 
-	result, err := ur.collection.UpdateOne(ctx, filter, update)
+	result, err := ur.collection.UpdateMany(ctx, filter, update)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	if result.MatchedCount == 0 {
-		return errors.New("user not found")
-	}
-
-	return nil
+	return result.ModifiedCount, nil
 }
 
-// ReactivateUser reactivates a user account (admin only)
-func (ur *UserRepository) ReactivateUser(ctx context.Context, userID string) error {
-	objectID, err := primitive.ObjectIDFromHex(userID)
+func (ur *UserRepository) DeleteUnverifiedUsers(ctx context.Context, createdBefore time.Time) (int64, error) {
+	filter := bson.M{
+		"isVerified": false,
+		"createdAt":  bson.M{"$lt": createdBefore},
+	}
+
+	result, err := ur.collection.DeleteMany(ctx, filter)
 	if err != nil {
-		return errors.New("invalid user ID")
+		return 0, err
 	}
 
-	filter := bson.M{"_id": objectID}
-	update := bson.M{
-		"$set": bson.M{
-			"isActive":  true,
-			"updatedAt": time.Now(),
-		},
-		"$unset": bson.M{
-			"deactivatedAt": "",
-		},
-	}
-
-	result, err := ur.collection.UpdateOne(ctx, filter, update)
-	if err != nil {
-		return err
-	}
-
-	if result.MatchedCount == 0 {
-		return errors.New("user not found")
-	}
-
-	return nil
+	return result.DeletedCount, nil
 }
 
-// GetUserStatistics gets user statistics (admin only)
-func (ur *UserRepository) GetUserStatistics(ctx context.Context) (*models.UserStatistics, error) {
-	// Count total users
-	totalUsers, err := ur.collection.CountDocuments(ctx, bson.M{})
-	if err != nil {
-		return nil, err
+// =============================================
+// INDEXES
+// =============================================
+
+func (ur *UserRepository) CreateIndexes(ctx context.Context) error {
+	indexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{"email", 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{"phoneNumber", 1}},
+			Options: options.Index().SetUnique(true).SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{"deviceToken", 1}},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{"verificationToken", 1}},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{"resetToken", 1}},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{"firstName", "text"}, {"lastName", "text"}, {"email", "text"}},
+			Options: options.Index().SetDefaultLanguage("english"),
+		},
+		{
+			Keys: bson.D{{"isActive", 1}},
+		},
+		{
+			Keys: bson.D{{"isOnline", 1}},
+		},
+		{
+			Keys: bson.D{{"isVerified", 1}},
+		},
+		{
+			Keys: bson.D{{"lastActivity", -1}},
+		},
+		{
+			Keys: bson.D{{"lastSeen", -1}},
+		},
+		{
+			Keys: bson.D{{"createdAt", -1}},
+		},
+		{
+			Keys: bson.D{{"role", 1}},
+		},
+		{
+			Keys:    bson.D{{"lockedUntil", 1}},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{"resetExpiresAt", 1}},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{"verificationExpiresAt", 1}},
+			Options: options.Index().SetSparse(true),
+		},
 	}
 
-	// Count active users
-	activeUsers, err := ur.collection.CountDocuments(ctx, bson.M{"isActive": true})
-	if err != nil {
-		return nil, err
-	}
-
-	// Count verified users
-	verifiedUsers, err := ur.collection.CountDocuments(ctx, bson.M{"isVerified": true})
-	if err != nil {
-		return nil, err
-	}
-
-	// Count online users (last seen within 15 minutes)
-	onlineThreshold := time.Now().Add(-15 * time.Minute)
-	onlineUsers, err := ur.collection.CountDocuments(ctx, bson.M{
-		"isOnline": true,
-		"lastSeen": bson.M{"$gte": onlineThreshold},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Count users by role
-	pipeline := []bson.M{
-		{"$group": bson.M{
-			"_id":   "$role",
-			"count": bson.M{"$sum": 1},
-		}},
-	}
-
-	cursor, err := ur.collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	roleStats := make(map[string]int64)
-	for cursor.Next(ctx) {
-		var result struct {
-			ID    string `bson:"_id"`
-			Count int64  `bson:"count"`
-		}
-		if err := cursor.Decode(&result); err != nil {
-			continue
-		}
-		roleStats[result.ID] = result.Count
-	}
-
-	return &models.UserStatistics{
-		TotalUsers:    totalUsers,
-		ActiveUsers:   activeUsers,
-		VerifiedUsers: verifiedUsers,
-		OnlineUsers:   onlineUsers,
-		UsersByRole:   roleStats,
-	}, nil
+	_, err := ur.collection.Indexes().CreateMany(ctx, indexes)
+	return err
 }

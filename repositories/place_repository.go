@@ -178,7 +178,7 @@ func (pr *PlaceRepository) SearchPlaces(ctx context.Context, req models.SearchPl
 	skip := (page - 1) * pageSize
 
 	opts := options.Find().
-		SetSort(bson.D{{"stats.visitCount", -1}, {"createdAt", -1}}).
+		SetSort(bson.D{{Key: "stats.visitCount", Value: -1}, {Key: "createdAt", Value: -1}}).
 		SetSkip(int64(skip)).
 		SetLimit(int64(pageSize))
 
@@ -451,7 +451,7 @@ func (pr *PlaceRepository) GetPlaceVisits(ctx context.Context, placeID string, p
 
 	skip := (page - 1) * pageSize
 	opts := options.Find().
-		SetSort(bson.D{{"arrivalTime", -1}}).
+		SetSort(bson.D{{Key: "arrivalTime", Value: -1}}).
 		SetSkip(int64(skip)).
 		SetLimit(int64(pageSize))
 
@@ -516,7 +516,7 @@ func (pr *PlaceRepository) GetPlaceReviews(ctx context.Context, placeID string, 
 
 	skip := (page - 1) * pageSize
 	opts := options.Find().
-		SetSort(bson.D{{"helpfulCount", -1}, {"createdAt", -1}}).
+		SetSort(bson.D{{Key: "helpfulCount", Value: -1}, {Key: "createdAt", Value: -1}}).
 		SetSkip(int64(skip)).
 		SetLimit(int64(pageSize))
 
@@ -564,7 +564,7 @@ func (pr *PlaceRepository) GetPlaceCheckins(ctx context.Context, placeID string,
 
 	skip := (page - 1) * pageSize
 	opts := options.Find().
-		SetSort(bson.D{{"createdAt", -1}}).
+		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
 		SetSkip(int64(skip)).
 		SetLimit(int64(pageSize))
 
