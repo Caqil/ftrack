@@ -121,7 +121,7 @@ func (es *EmergencyService) UpdateEmergencyAlert(ctx context.Context, userID, al
 	}
 
 	updateFields := bson.M{"updatedAt": time.Now()}
-	
+
 	if req.Title != "" {
 		updateFields["title"] = req.Title
 	}
@@ -277,14 +277,14 @@ func (es *EmergencyService) GetSOSStatus(ctx context.Context, userID string) (*m
 	}
 
 	status := &models.SOSStatus{Active: false}
-	
+
 	if len(emergencies) > 0 {
 		emergency := emergencies[0]
 		status.Active = true
 		status.TriggeredAt = emergency.CreatedAt
 		status.Type = emergency.Type
 		status.AutoCall = emergency.Response.AutoSent
-		
+
 		// Calculate countdown if applicable
 		if emergency.Response.AutoSent {
 			elapsed := int(time.Since(emergency.CreatedAt).Seconds())
@@ -303,7 +303,7 @@ func (es *EmergencyService) UpdateSOSSettings(ctx context.Context, userID string
 		// Create new settings if not found
 		userObjectID, _ := primitive.ObjectIDFromHex(userID)
 		settings = &models.EmergencySettings{
-			UserID:    userObjectID,
+			UserID: userObjectID,
 		}
 	}
 
@@ -322,11 +322,11 @@ func (es *EmergencyService) GetSOSSettings(ctx context.Context, userID string) (
 func (es *EmergencyService) TestSOS(ctx context.Context, userID string) (map[string]interface{}, error) {
 	// Test SOS functionality without triggering actual emergency
 	result := map[string]interface{}{
-		"status":      "success",
-		"contacts":    "verified",
-		"location":    "available",
-		"services":    "reachable",
-		"timestamp":   time.Now(),
+		"status":    "success",
+		"contacts":  "verified",
+		"location":  "available",
+		"services":  "reachable",
+		"timestamp": time.Now(),
 	}
 
 	// Test emergency contacts
@@ -401,7 +401,7 @@ func (es *EmergencyService) ConfirmCrash(ctx context.Context, userID, detectionI
 		if req.Description != "" {
 			updateFields["description"] = emergency.Description + " - " + req.Description
 		}
-		
+
 		// Trigger emergency notifications
 		go es.handleEmergencyNotifications(ctx, emergency)
 	} else {
@@ -446,7 +446,7 @@ func (es *EmergencyService) UpdateCrashDetectionSettings(ctx context.Context, us
 	if err != nil {
 		userObjectID, _ := primitive.ObjectIDFromHex(userID)
 		settings = &models.EmergencySettings{
-			UserID:    userObjectID,
+			UserID: userObjectID,
 		}
 	}
 
@@ -534,7 +534,7 @@ func (es *EmergencyService) UpdateEmergencyContact(ctx context.Context, userID, 
 	if req.Relationship != "" {
 		contact.Relationship = req.Relationship
 	}
-	
+
 	contact.UpdatedAt = time.Now()
 
 	err = es.emergencyRepo.UpdateEmergencyContact(ctx, userID, contactID, contact)
@@ -743,14 +743,14 @@ func (es *EmergencyService) UpdateEmergencyNumbers(ctx context.Context, userID s
 
 func (es *EmergencyService) ShareEmergencyLocation(ctx context.Context, userID string, req models.ShareLocationRequest) (map[string]interface{}, error) {
 	share := map[string]interface{}{
-		"shareId":      primitive.NewObjectID().Hex(),
-		"userId":       userID,
-		"recipients":   req.Recipients,
-		"duration":     req.Duration,
-		"message":      req.Message,
-		"shareLevel":   req.ShareLevel,
-		"createdAt":    time.Now(),
-		"active":       true,
+		"shareId":    primitive.NewObjectID().Hex(),
+		"userId":     userID,
+		"recipients": req.Recipients,
+		"duration":   req.Duration,
+		"message":    req.Message,
+		"shareLevel": req.ShareLevel,
+		"createdAt":  time.Now(),
+		"active":     true,
 	}
 
 	if req.ExpiresAt != nil {
@@ -1183,7 +1183,7 @@ func (es *EmergencyService) UpdateEmergencySettings(ctx context.Context, userID 
 	if err != nil {
 		userObjectID, _ := primitive.ObjectIDFromHex(userID)
 		settings = &models.EmergencySettings{
-			UserID:    userObjectID,
+			UserID: userObjectID,
 		}
 	}
 
@@ -1227,13 +1227,13 @@ func (es *EmergencyService) GetEmergencyAutomationSettings(ctx context.Context, 
 
 func (es *EmergencyService) UpdateEmergencyAutomationSettings(ctx context.Context, userID string, req models.EmergencyAutomationSettingsRequest) (map[string]interface{}, error) {
 	settings := map[string]interface{}{
-		"userId":                   userID,
-		"autoTriggerRules":         req.AutoTriggerRules,
-		"autoResponseEnabled":      req.AutoResponseEnabled,
-		"autoLocationSharing":      req.AutoLocationSharing,
-		"autoContactNotification":  req.AutoContactNotification,
-		"smartDetection":           req.SmartDetection,
-		"updatedAt":                time.Now(),
+		"userId":                  userID,
+		"autoTriggerRules":        req.AutoTriggerRules,
+		"autoResponseEnabled":     req.AutoResponseEnabled,
+		"autoLocationSharing":     req.AutoLocationSharing,
+		"autoContactNotification": req.AutoContactNotification,
+		"smartDetection":          req.SmartDetection,
+		"updatedAt":               time.Now(),
 	}
 
 	err := es.emergencyRepo.UpdateAutomationSettings(ctx, userID, settings)
@@ -1371,17 +1371,17 @@ func (es *EmergencyService) UpdateMedicalConditions(ctx context.Context, userID 
 
 func (es *EmergencyService) BroadcastEmergency(ctx context.Context, userID string, req models.BroadcastEmergencyRequest) (map[string]interface{}, error) {
 	broadcast := map[string]interface{}{
-		"broadcastId":  primitive.NewObjectID().Hex(),
-		"senderId":     userID,
-		"type":         req.Type,
-		"title":        req.Title,
-		"message":      req.Message,
-		"priority":     req.Priority,
-		"recipients":   req.Recipients,
-		"channels":     req.Channels,
-		"requireAck":   req.RequireAck,
-		"timestamp":    time.Now(),
-		"status":       "sent",
+		"broadcastId": primitive.NewObjectID().Hex(),
+		"senderId":    userID,
+		"type":        req.Type,
+		"title":       req.Title,
+		"message":     req.Message,
+		"priority":    req.Priority,
+		"recipients":  req.Recipients,
+		"channels":    req.Channels,
+		"requireAck":  req.RequireAck,
+		"timestamp":   time.Now(),
+		"status":      "sent",
 	}
 
 	if req.ExpiresAt != nil {
@@ -1497,7 +1497,7 @@ func (es *EmergencyService) UpdateEmergency(ctx context.Context, userID, emergen
 	}
 
 	updateFields := bson.M{"updatedAt": time.Now()}
-	
+
 	if req.Status != "" {
 		updateFields["status"] = req.Status
 	}
@@ -1669,15 +1669,21 @@ func (es *EmergencyService) notifyEmergencyContacts(ctx context.Context, emergen
 
 			if len(userIDs) > 0 {
 				notifReq := models.SendNotificationRequest{
-					UserIDs:  userIDs,
-					Type:     models.NotificationEmergencySOS,
-					Title:    emergency.Title,
-					Body:     fmt.Sprintf("%s %s needs help", user.FirstName, user.LastName),
-					Priority: "urgent",
-					Channels: models.NotificationChannels{
-						Push:  true,
-						SMS:   true,
-						InApp: true,
+					Recipients:       userIDs,     // Changed from UserIDs
+					Type:             "emergency", // Changed from models.NotificationEmergencySOS
+					Title:            emergency.Title,
+					Message:          fmt.Sprintf("%s %s needs help", user.FirstName, user.LastName), // Changed from Body
+					Priority:         "urgent",
+					Category:         "safety",
+					DeliveryChannels: []string{"push", "sms", "in-app"}, // Changed from Channels
+					Data: map[string]interface{}{
+						"emergencyId": emergency.ID.Hex(),
+						"userId":      emergency.UserID.Hex(),
+						"location": map[string]float64{
+							"latitude":  emergency.Location.Latitude,
+							"longitude": emergency.Location.Longitude,
+						},
+						"emergencyType": emergency.Type,
 					},
 				}
 
@@ -1710,7 +1716,7 @@ func (es *EmergencyService) broadcastEmergencyAlert(userID string, emergency *mo
 
 func (es *EmergencyService) handleSOSCountdown(ctx context.Context, emergencyID string, countdownSec int) {
 	time.Sleep(time.Duration(countdownSec) * time.Second)
-	
+
 	// Check if SOS was cancelled
 	emergency, err := es.emergencyRepo.GetByID(ctx, emergencyID)
 	if err != nil || emergency.Status != models.EmergencyStatusActive {
@@ -1723,7 +1729,7 @@ func (es *EmergencyService) handleSOSCountdown(ctx context.Context, emergencyID 
 
 func (es *EmergencyService) handleCrashConfirmationCountdown(ctx context.Context, emergencyID string) {
 	time.Sleep(30 * time.Second) // 30 second countdown
-	
+
 	emergency, err := es.emergencyRepo.GetByID(ctx, emergencyID)
 	if err != nil || emergency.Status != models.EmergencyStatusActive {
 		return
@@ -1739,7 +1745,7 @@ func (es *EmergencyService) processEmergencyExport(ctx context.Context, userID s
 	export.Status = "completed"
 	export.Progress = 100
 	export.CompletedAt = time.Now()
-	
+
 	// Update export status in database
 	es.emergencyRepo.UpdateExport(ctx, export)
 }

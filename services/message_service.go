@@ -1551,7 +1551,6 @@ func (ms *MessageService) ReportMessage(ctx context.Context, userID, messageID s
 
 	return &report, nil
 }
-
 func (ms *MessageService) FlagMessage(ctx context.Context, userID, messageID string, req models.FlagMessageRequest) error {
 	// Check admin permissions
 	isAdmin, err := ms.userRepo.IsAdmin(ctx, userID)
@@ -1559,7 +1558,8 @@ func (ms *MessageService) FlagMessage(ctx context.Context, userID, messageID str
 		return errors.New("access denied")
 	}
 
-	message, err := ms.messageRepo.GetByID(ctx, messageID)
+	// Get the message to verify it exists
+	_, err = ms.messageRepo.GetByID(ctx, messageID)
 	if err != nil {
 		return err
 	}
@@ -2405,28 +2405,95 @@ func (ms *MessageService) recordForwardHistory(originalMessageID, forwardedMessa
 		logrus.Errorf("Failed to record forward history: %v", err)
 	}
 }
-
 func (ms *MessageService) getOrCreateDirectMessageCircle(ctx context.Context, userID1, userID2 string) (string, error) {
-	// Check if DM circle already exists
-	circleID, err := ms.circleRepo.GetDirectMessageCircle(ctx, userID1, userID2)
-	if err == nil {
-		return circleID, nil
+	// Check if DM circle already exists between these users
+	// Since GetDirectMessageCircle doesn't exist, we need to implement this search manually
+	userID1Obj, err := primitive.ObjectIDFromHex(userID1)
+	if err != nil {
+		return "", errors.New("invalid user ID 1")
+	}
+
+	userID2Obj, err := primitive.ObjectIDFromHex(userID2)
+	if err != nil {
+		return "", errors.New("invalid user ID 2")
+	}
+
+	// Search for existing DM circle (circle with only these two users)
+	circles1, _ := ms.circleRepo.GetUserCircles(ctx, userID1)
+	for _, circle := range circles1 {
+		if len(circle.Members) == 2 && circle.Name == "Direct Message" {
+			// Check if both users are in this circle
+			foundUser1, foundUser2 := false, false
+			for _, member := range circle.Members {
+				if member.UserID == userID1Obj {
+					foundUser1 = true
+				}
+				if member.UserID == userID2Obj {
+					foundUser2 = true
+				}
+			}
+			if foundUser1 && foundUser2 {
+				return circle.ID.Hex(), nil
+			}
+		}
 	}
 
 	// Create new DM circle
 	circle := models.Circle{
-		Name:      "Direct Message",
-		Type:      "direct_message",
-		IsPrivate: true,
-		Members:   []primitive.ObjectID{},
-		CreatedBy: userID1,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Name:       "Direct Message",
+		AdminID:    userID1Obj,                 // Use AdminID instead of CreatedBy
+		InviteCode: utils.GenerateInviteCode(), // Generate invite code
+		Settings: models.CircleSettings{
+			AutoAcceptInvites:  true,
+			RequireApproval:    false,
+			MaxMembers:         2, // Only allow 2 members for DM
+			LocationSharing:    true,
+			DrivingReports:     true,
+			EmergencyAlerts:    true,
+			AutoCheckIn:        false,
+			PlaceNotifications: false,
+		},
+		Stats: models.CircleStats{
+			TotalMembers:  2,
+			ActiveMembers: 2,
+		},
+		Members: []models.CircleMember{}, // Initialize empty, will add below
 	}
 
-	userID1Obj, _ := primitive.ObjectIDFromHex(userID1)
-	userID2Obj, _ := primitive.ObjectIDFromHex(userID2)
-	circle.Members = append(circle.Members, userID1Obj, userID2Obj)
+	// Create CircleMember structs for both users
+	member1 := models.CircleMember{
+		UserID: userID1Obj,
+		Role:   "admin", // First user is admin
+		Status: "active",
+		Permissions: models.MemberPermissions{
+			CanSeeLocation:   true,
+			CanSeeDriving:    true,
+			CanSendMessages:  true,
+			CanManagePlaces:  false,
+			CanReceiveAlerts: true,
+			CanSendEmergency: true,
+		},
+		JoinedAt:     time.Now(),
+		LastActivity: time.Now(),
+	}
+
+	member2 := models.CircleMember{
+		UserID: userID2Obj,
+		Role:   "member", // Second user is member
+		Status: "active",
+		Permissions: models.MemberPermissions{
+			CanSeeLocation:   true,
+			CanSeeDriving:    true,
+			CanSendMessages:  true,
+			CanManagePlaces:  false,
+			CanReceiveAlerts: true,
+			CanSendEmergency: true,
+		},
+		JoinedAt:     time.Now(),
+		LastActivity: time.Now(),
+	}
+
+	circle.Members = append(circle.Members, member1, member2)
 
 	err = ms.circleRepo.Create(ctx, &circle)
 	if err != nil {

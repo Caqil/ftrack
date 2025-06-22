@@ -3,6 +3,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"ftrack/models"
 	"time"
@@ -931,4 +932,44 @@ func (nr *NotificationRepository) GetNotificationsByDateRange(ctx context.Contex
 	}
 
 	return notifications, total, nil
+}
+
+func (nr *NotificationRepository) DeleteExpired(ctx context.Context) (int64, error) {
+	filter := bson.M{
+		"expiresAt": bson.M{
+			"$exists": true,
+			"$lt":     time.Now(),
+		},
+	}
+
+	result, err := nr.notificationCollection.DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.DeletedCount, nil
+}
+
+// Notification Preferences
+func (nr *NotificationRepository) GetUserPreferences(ctx context.Context, userID string) (*models.NotificationPreferences, error) {
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, errors.New("invalid user ID")
+	}
+
+	var prefs models.NotificationPreferences
+	err = nr.notificationCollection.FindOne(ctx, bson.M{"userId": objectID}).Decode(&prefs)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Return default preferences
+			return &models.NotificationPreferences{
+				UserID:        objectID.Hex(),
+				GlobalEnabled: true,
+				UpdatedAt:     time.Now(),
+			}, nil
+		}
+		return nil, err
+	}
+
+	return &prefs, nil
 }

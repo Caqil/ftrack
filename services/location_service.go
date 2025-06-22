@@ -998,7 +998,7 @@ func (ls *LocationService) hasLocationPermission(ctx context.Context, requesterI
 
 func (ls *LocationService) handleGeofenceEvents(ctx context.Context, userID string, prevLocation, newLocation models.Location, circles []models.Circle) {
 	// Get all geofences (places) for the user
-	places, err := ls.placeRepo.GetUserPlaces(ctx, userID)
+	places, _, err := ls.placeRepo.GetUserPlaces(ctx, userID, models.GetPlacesRequest{})
 	if err != nil {
 		logrus.Error("Failed to get user places: ", err)
 		return

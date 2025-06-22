@@ -282,3 +282,11 @@ const (
 	ThemeDark  = "dark"
 	ThemeAuto  = "auto"
 )
+
+type UserStatistics struct {
+	TotalUsers    int64            `json:"totalUsers" bson:"totalUsers"`
+	ActiveUsers   int64            `json:"activeUsers" bson:"activeUsers"`
+	VerifiedUsers int64            `json:"verifiedUsers" bson:"verifiedUsers"`
+	OnlineUsers   int64            `json:"onlineUsers" bson:"onlineUsers"`
+	UsersByRole   map[string]int64 `json:"usersByRole" bson:"usersByRole"`
+}

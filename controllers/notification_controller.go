@@ -979,7 +979,14 @@ func (nc *NotificationController) SendTestEmail(c *gin.Context) {
 	err := nc.notificationService.SendTestEmail(c.Request.Context(), userID, req)
 	if err != nil {
 		logrus.Errorf("Send test email failed: %v", err)
-		utils.InternalServerErrorResponse(c, "Failed to send test email")
+		switch err.Error() {
+		case "email address not verified":
+			utils.BadRequestResponse(c, "Email address must be verified before sending test emails")
+		case "failed to get email settings":
+			utils.BadRequestResponse(c, "Email settings not configured")
+		default:
+			utils.InternalServerErrorResponse(c, "Failed to send test email")
+		}
 		return
 	}
 
@@ -2129,7 +2136,6 @@ func (nc *NotificationController) ExportNotificationHistory(c *gin.Context) {
 		utils.BadRequestResponse(c, "Invalid request body")
 		return
 	}
-	req.UserID = userID
 
 	exportResult, err := nc.notificationService.ExportNotificationHistory(c.Request.Context(), req)
 	if err != nil {

@@ -39,7 +39,7 @@ func SetupAuthRoutes(router *gin.RouterGroup, authController *controllers.AuthCo
 
 	// Protected authentication endpoints (require valid token)
 	protected := auth.Group("/")
-	protected.Use(authMiddleware.RequireAuth()) // ✅ Now authMiddleware is available
+	protected.Use(authMiddleware.RequireAuth())
 	{
 		// Current user token operations
 		protected.POST("/validate", authController.ValidateToken)

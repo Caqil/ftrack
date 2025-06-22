@@ -21,7 +21,7 @@ type NotificationService struct {
 	circleRepo       *repositories.CircleRepository
 	redis            *redis.Client
 	hub              *websocket.Hub
-	emailService     *EmailService
+	emailService     EmailService // Remove the pointer (*) for interface
 	smsService       *SMSService
 	pushService      *PushService
 }
@@ -32,7 +32,7 @@ func NewNotificationService(
 	circleRepo *repositories.CircleRepository,
 	redis *redis.Client,
 	hub *websocket.Hub,
-	emailService *EmailService,
+	emailService EmailService, // Remove the pointer (*) for interface
 	smsService *SMSService,
 	pushService *PushService,
 ) *NotificationService {
@@ -146,6 +146,7 @@ func (es *SMTPEmailService) SendTestEmail(ctx context.Context, toEmail, subject,
 		},
 	})
 }
+
 func (ns *NotificationService) MarkAsRead(ctx context.Context, userID, notificationID string) error {
 	notification, err := ns.GetNotification(ctx, userID, notificationID)
 	if err != nil {
@@ -337,12 +338,21 @@ func (ns *NotificationService) GetCircleNotifications(ctx context.Context, userI
 		return nil, fmt.Errorf("circle not found")
 	}
 
+	// Convert userID string to ObjectID for comparisons
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID")
+	}
+
 	hasAccess := false
-	if circle.OwnerID == userID {
+
+	// Check if user is the admin (owner) of the circle
+	if circle.AdminID == userObjectID {
 		hasAccess = true
 	} else {
+		// Check if user is a member of the circle
 		for _, member := range circle.Members {
-			if member.UserID == userID {
+			if member.UserID == userObjectID {
 				hasAccess = true
 				break
 			}
@@ -1325,7 +1335,7 @@ func (ns *NotificationService) SendNotification(ctx context.Context, req models.
 					logrus.Errorf("Failed to send push notification: %v", err)
 				}
 			case "email":
-				if err := ns.notificationService.SendNotification(ctx, notification); err != nil {
+				if err := ns.emailService.SendNotification(ctx, notification); err != nil {
 					logrus.Errorf("Failed to send email notification: %v", err)
 				}
 			case "sms":

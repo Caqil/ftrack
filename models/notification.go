@@ -458,7 +458,6 @@ type NotificationRule struct {
 	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
-
 type CreateRuleRequest struct {
 	Name        string          `json:"name" validate:"required"`
 	Description string          `json:"description"`
@@ -563,7 +562,6 @@ type NotificationStats struct {
 	Trends    []StatsTrend     `json:"trends"`
 }
 
-
 type DeliveryStats struct {
 	Channel         string         `json:"channel"`
 	Total           int64          `json:"total"`
@@ -578,7 +576,6 @@ type FailureStats struct {
 	Reason string `json:"reason"`
 	Count  int64  `json:"count"`
 }
-
 
 type NotificationTrends struct {
 	Metric string       `json:"metric"`

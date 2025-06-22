@@ -93,7 +93,7 @@ func InitializeNotificationServices(
 
 	// Initialize external services
 	pushService := services.NewPushService(fcmClient, notificationRepo)
-	emailService := services.NewEmailService(
+	emailService := services.SMTPEmailService(
 		config.SMTPHost,
 		config.SMTPPort,
 		config.SMTPUsername,

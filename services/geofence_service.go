@@ -71,7 +71,7 @@ func (gs *GeofenceService) ProcessLocationUpdate(ctx context.Context, userID str
 	}
 
 	// Get user's places
-	places, err := gs.placeRepo.GetUserPlaces(ctx, userID)
+	places, _, err := gs.placeRepo.GetUserPlaces(ctx, userID, models.GetPlacesRequest{})
 	if err != nil {
 		logrus.Error("Failed to get user places: ", err)
 		return

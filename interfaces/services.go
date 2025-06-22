@@ -49,5 +49,4 @@ type WebSocketBroadcaster interface {
 }
 type SMSService interface {
 	SendSMS(ctx context.Context, phone, message string) error
-	// Add other SMS methods you need
 }
