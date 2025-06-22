@@ -3,7 +3,10 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"ftrack/models"
+	"ftrack/repositories"
 	"html/template"
 	"net/smtp"
 
@@ -13,7 +16,8 @@ import (
 // EmailService interface - keeping your existing interface
 type EmailService interface {
 	SendEmail(data EmailData) error
-	// Adding auth-specific methods
+	SendNotification(ctx context.Context, notification *models.Notification) error
+	SendTestEmail(ctx context.Context, toEmail, subject, content string) error
 	SendVerificationEmail(email, firstName, token string) error
 	SendPasswordResetEmail(email, firstName, token string) error
 	SendWelcomeEmail(email, firstName string) error
@@ -31,12 +35,13 @@ type EmailData struct {
 
 // SMTPEmailService implements EmailService using SMTP - extending your existing service
 type SMTPEmailService struct {
-	host     string
-	port     string
-	username string
-	password string
-	from     string
-	baseURL  string // Adding base URL for auth links
+	host             string
+	port             string
+	username         string
+	password         string
+	from             string
+	baseURL          string // Adding base URL for auth links
+	notificationRepo *repositories.NotificationRepository
 }
 
 // NewSMTPEmailService creates a new SMTP email service - updated constructor
@@ -547,51 +552,4 @@ Content-Type: text/html; charset=UTF-8
 --%s--`, es.from, to, subject, boundary, boundary, textBody, boundary, htmlBody, boundary)
 
 	return message
-}
-
-// MockEmailService for testing/development - keeping your existing mock service
-type MockEmailService struct{}
-
-func NewMockEmailService() EmailService {
-	return &MockEmailService{}
-}
-
-func (es *MockEmailService) SendEmail(data EmailData) error {
-	logrus.Infof("[MOCK EMAIL] To: %s, Subject: %s, Template: %s",
-		data.To, data.Subject, data.Template)
-
-	// Log template data for debugging
-	if data.Data != nil {
-		for key, value := range data.Data {
-			logrus.Infof("[MOCK EMAIL] Data - %s: %v", key, value)
-		}
-	}
-
-	return nil
-}
-
-// Mock implementations for auth methods
-func (es *MockEmailService) SendVerificationEmail(email, firstName, token string) error {
-	logrus.Infof("[MOCK EMAIL] Verification email to %s for %s with token %s", email, firstName, token)
-	return nil
-}
-
-func (es *MockEmailService) SendPasswordResetEmail(email, firstName, token string) error {
-	logrus.Infof("[MOCK EMAIL] Password reset email to %s for %s with token %s", email, firstName, token)
-	return nil
-}
-
-func (es *MockEmailService) SendWelcomeEmail(email, firstName string) error {
-	logrus.Infof("[MOCK EMAIL] Welcome email to %s for %s", email, firstName)
-	return nil
-}
-
-func (es *MockEmailService) Send2FADisabledEmail(email, firstName string) error {
-	logrus.Infof("[MOCK EMAIL] 2FA disabled email to %s for %s", email, firstName)
-	return nil
-}
-
-func (es *MockEmailService) SendPasswordChangedEmail(email, firstName string) error {
-	logrus.Infof("[MOCK EMAIL] Password changed email to %s for %s", email, firstName)
-	return nil
 }

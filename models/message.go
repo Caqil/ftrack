@@ -938,7 +938,262 @@ type ImportJob struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// Analytics Response Models
+// This is the internal model used between repository and service layers
+type RawMessageStats struct {
+	TotalMessages  int64            `json:"totalMessages" bson:"totalMessages"`
+	MessagesByType map[string]int64 `json:"messagesByType" bson:"messagesByType"`
+	TotalReactions int64            `json:"totalReactions" bson:"totalReactions"`
+	TotalReplies   int64            `json:"totalReplies" bson:"totalReplies"`
+	ActiveUsers    int64            `json:"activeUsers" bson:"activeUsers"`
+	BusiestHour    int              `json:"busiestHour" bson:"busiestHour"` // 0-23
+	BusiestDay     string           `json:"busiestDay" bson:"busiestDay"`   // Day name
+}
+
+// MessageActivityRequest represents the request for getting message activity data
+type MessageActivityRequest struct {
+	CircleID    string `json:"circleId,omitempty"`
+	Period      string `json:"period" validate:"required,oneof=1d 7d 30d 90d"`
+	Granularity string `json:"granularity" validate:"required,oneof=hour day"`
+}
+
+// MessageTrendsRequest represents the request for getting message trends
+type MessageTrendsRequest struct {
+	CircleID   string `json:"circleId,omitempty"`
+	Period     string `json:"period" validate:"required,oneof=7d 30d 90d"`
+	MetricType string `json:"metricType" validate:"required,oneof=messages reactions replies users"`
+}
+
+// TopUsersRequest represents the request for getting top active users
+type TopUsersRequest struct {
+	CircleID string `json:"circleId,omitempty"`
+	Period   string `json:"period" validate:"required,oneof=1d 7d 30d 90d"`
+	Limit    int    `json:"limit" validate:"min=1,max=50"`
+}
+
+// PopularMessagesRequest represents the request for getting popular messages
+type PopularMessagesRequest struct {
+	CircleID string `json:"circleId,omitempty"`
+	Period   string `json:"period" validate:"required,oneof=1d 7d 30d 90d"`
+	SortBy   string `json:"sortBy" validate:"required,oneof=reactions replies views score"`
+	Limit    int    `json:"limit" validate:"min=1,max=50"`
+}
+
+// =============================================================================
+// EXTENDED STATISTICS MODELS
+// =============================================================================
+
+// DetailedMessageStats represents comprehensive message statistics with additional metrics
+type DetailedMessageStats struct {
+	Basic              RawMessageStats         `json:"basic"`
+	HourlyDistribution map[int]int64           `json:"hourlyDistribution"` // Hour (0-23) -> message count
+	DailyDistribution  map[string]int64        `json:"dailyDistribution"`  // Day name -> message count
+	TypeDistribution   map[string]TypeStats    `json:"typeDistribution"`   // Message type -> detailed stats
+	UserActivity       []UserActivityStats     `json:"userActivity"`       // Top active users
+	EngagementMetrics  DetailedEngagementStats `json:"engagementMetrics"`
+	TimePatterns       TimePatternStats        `json:"timePatterns"`
+}
+
+// TypeStats represents statistics for a specific message type
+type TypeStats struct {
+	Count          int64   `json:"count"`
+	Percentage     float64 `json:"percentage"`
+	AvgReactions   float64 `json:"avgReactions"`
+	AvgReplies     float64 `json:"avgReplies"`
+	TotalReactions int64   `json:"totalReactions"`
+	TotalReplies   int64   `json:"totalReplies"`
+}
+
+
+// DetailedEngagementStats represents detailed engagement metrics
+type DetailedEngagementStats struct {
+	EngagementStats                              // Embedded basic engagement stats
+	ReactionBreakdown  map[string]int64          `json:"reactionBreakdown"` // Emoji -> count
+	TopReactedMessages []PopularMessageInfo      `json:"topReactedMessages"`
+	TopRepliedMessages []PopularMessageInfo      `json:"topRepliedMessages"`
+	EngagementRate     float64                   `json:"engagementRate"` // (reactions + replies) / total messages
+	UserEngagement     map[string]UserEngagement `json:"userEngagement"` // UserID -> engagement metrics
+}
+
+// UserEngagement represents engagement metrics for a specific user
+type UserEngagement struct {
+	ReactionsGiven    int64   `json:"reactionsGiven"`
+	ReactionsReceived int64   `json:"reactionsReceived"`
+	RepliesSent       int64   `json:"repliesSent"`
+	RepliesReceived   int64   `json:"repliesReceived"`
+	EngagementScore   float64 `json:"engagementScore"`
+}
+
+// TimePatternStats represents time-based pattern analysis
+type TimePatternStats struct {
+	PeakHours        []int               `json:"peakHours"`  // Hours with highest activity
+	QuietHours       []int               `json:"quietHours"` // Hours with lowest activity
+	PeakDays         []string            `json:"peakDays"`   // Days with highest activity
+	WeekdayVsWeekend WeekdayWeekendStats `json:"weekdayVsWeekend"`
+	SeasonalPatterns map[string]int64    `json:"seasonalPatterns"` // Month -> message count
+}
+
+// WeekdayWeekendStats represents weekday vs weekend activity comparison
+type WeekdayWeekendStats struct {
+	WeekdayMessages int64   `json:"weekdayMessages"`
+	WeekendMessages int64   `json:"weekendMessages"`
+	WeekdayAvg      float64 `json:"weekdayAvg"`
+	WeekendAvg      float64 `json:"weekendAvg"`
+	Ratio           float64 `json:"ratio"` // weekday/weekend ratio
+}
+
+// =============================================================================
+// COMPARISON AND HISTORICAL MODELS
+// =============================================================================
+
+// HistoricalMessageStats represents message statistics with historical comparison
+type HistoricalMessageStats struct {
+	Current    RawMessageStats `json:"current"`
+	Previous   RawMessageStats `json:"previous"`
+	Comparison StatsComparison `json:"comparison"`
+	Trend      StatsTrend      `json:"trend"`
+	Forecast   *StatsForecast  `json:"forecast,omitempty"`
+}
+
+// StatsComparison represents comparison between current and previous periods
+type StatsComparison struct {
+	MessagesChange   int64   `json:"messagesChange"`
+	MessagesPercent  float64 `json:"messagesPercent"`
+	ReactionsChange  int64   `json:"reactionsChange"`
+	ReactionsPercent float64 `json:"reactionsPercent"`
+	RepliesChange    int64   `json:"repliesChange"`
+	RepliesPercent   float64 `json:"repliesPercent"`
+	UsersChange      int64   `json:"usersChange"`
+	UsersPercent     float64 `json:"usersPercent"`
+}
+
+// StatsTrend represents trend analysis
+type StatsTrend struct {
+	Direction  string  `json:"direction"`  // up, down, stable
+	Strength   string  `json:"strength"`   // strong, moderate, weak
+	Confidence float64 `json:"confidence"` // 0-1
+	TrendScore float64 `json:"trendScore"` // Overall trend metric
+}
+
+// StatsForecast represents forecasted statistics
+type StatsForecast struct {
+	NextPeriod        RawMessageStats `json:"nextPeriod"`
+	Confidence        float64         `json:"confidence"`
+	ForecastMethod    string          `json:"forecastMethod"`
+	FactorsConsidered []string        `json:"factorsConsidered"`
+}
+
+// =============================================================================
+// CIRCLE-SPECIFIC STATISTICS
+// =============================================================================
+
+// CircleMessageStats represents message statistics for a specific circle
+type CircleMessageStats struct {
+	CircleID       string                `json:"circleId"`
+	CircleName     string                `json:"circleName"`
+	Stats          RawMessageStats       `json:"stats"`
+	MemberStats    []MemberActivityStats `json:"memberStats"`
+	TopMessages    []PopularMessageInfo  `json:"topMessages"`
+	RecentActivity []ActivityDataPoint   `json:"recentActivity"`
+	Comparison     *CircleComparison     `json:"comparison,omitempty"`
+}
+
+// MemberActivityStats represents activity statistics for a circle member
+type MemberActivityStats struct {
+	UserID            string    `json:"userId"`
+	Username          string    `json:"username,omitempty"`
+	FirstName         string    `json:"firstName,omitempty"`
+	LastName          string    `json:"lastName,omitempty"`
+	Avatar            string    `json:"avatar,omitempty"`
+	MessageCount      int64     `json:"messageCount"`
+	ReactionCount     int64     `json:"reactionCount"`
+	ReplyCount        int64     `json:"replyCount"`
+	LastMessageAt     time.Time `json:"lastMessageAt"`
+	JoinedAt          time.Time `json:"joinedAt"`
+	ActivityLevel     string    `json:"activityLevel"` // high, medium, low
+	ContributionScore float64   `json:"contributionScore"`
+}
+
+// CircleComparison represents comparison with other accessible circles
+type CircleComparison struct {
+	AverageMessages  float64 `json:"averageMessages"`
+	AverageReactions float64 `json:"averageReactions"`
+	AverageReplies   float64 `json:"averageReplies"`
+	AverageUsers     float64 `json:"averageUsers"`
+	RankByMessages   int     `json:"rankByMessages"`
+	RankByEngagement int     `json:"rankByEngagement"`
+	TotalCircles     int     `json:"totalCircles"`
+}
+
+// =============================================================================
+// ANALYTICS RESPONSE MODELS
+// =============================================================================
+
+// MessageAnalyticsResponse represents comprehensive message analytics
+type MessageAnalyticsResponse struct {
+	Period          string                 `json:"period"`
+	CircleID        string                 `json:"circleId,omitempty"`
+	Basic           MessageStatsResponse   `json:"basic"`
+	Detailed        DetailedMessageStats   `json:"detailed"`
+	Historical      HistoricalMessageStats `json:"historical"`
+	Activity        []ActivityDataPoint    `json:"activity"`
+	Trends          []TrendDataPoint       `json:"trends"`
+	TopUsers        []UserActivityStats    `json:"topUsers"`
+	PopularMessages []PopularMessageInfo   `json:"popularMessages"`
+	GeneratedAt     time.Time              `json:"generatedAt"`
+}
+
+// BulkStatsResponse represents statistics for multiple circles
+type BulkStatsResponse struct {
+	Period      string               `json:"period"`
+	Summary     RawMessageStats      `json:"summary"`
+	CircleStats []CircleMessageStats `json:"circleStats"`
+	Comparisons []CircleComparison   `json:"comparisons"`
+	GeneratedAt time.Time            `json:"generatedAt"`
+}
+
+// =============================================================================
+// EXPORT AND REPORTING MODELS
+// =============================================================================
+
+// StatsExportRequest represents a request to export statistics
+type StatsExportRequest struct {
+	CircleIDs     []string `json:"circleIds,omitempty"`
+	Period        string   `json:"period" validate:"required,oneof=1d 7d 30d 90d"`
+	Format        string   `json:"format" validate:"required,oneof=json csv excel pdf"`
+	IncludeRaw    bool     `json:"includeRaw"`
+	IncludeCharts bool     `json:"includeCharts"`
+}
+
+// StatsReport represents a formatted statistics report
+type StatsReport struct {
+	ID          string          `json:"id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Period      string          `json:"period"`
+	CircleIDs   []string        `json:"circleIds"`
+	Summary     RawMessageStats `json:"summary"`
+	Sections    []ReportSection `json:"sections"`
+	Charts      []ChartData     `json:"charts,omitempty"`
+	GeneratedAt time.Time       `json:"generatedAt"`
+	GeneratedBy string          `json:"generatedBy"`
+}
+
+// ReportSection represents a section in a statistics report
+type ReportSection struct {
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Type        string                 `json:"type"` // stats, chart, table, text
+	Data        map[string]interface{} `json:"data"`
+}
+
+// ChartData represents chart configuration and data
+type ChartData struct {
+	ID      string                   `json:"id"`
+	Title   string                   `json:"title"`
+	Type    string                   `json:"type"` // line, bar, pie, area
+	Data    []map[string]interface{} `json:"data"`
+	Options map[string]interface{}   `json:"options"`
+}
 
 type ActivityResponse struct {
 	Period      string              `json:"period"`

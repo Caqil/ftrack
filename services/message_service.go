@@ -501,7 +501,13 @@ func (ms *MessageService) UploadMedia(ctx context.Context, userID string, req mo
 		UploadedAt:   time.Now(),
 	}
 
-	err = ms.mediaRepo.Create(ctx, messageMedia)
+	// Convert to MessageMediaExtended if needed
+	messageMediaExtended := &models.MessageMediaExtended{
+		MessageMedia: *messageMedia,
+		// Add any additional fields initialization here if needed
+	}
+
+	err = ms.mediaRepo.Create(ctx, messageMediaExtended)
 	if err != nil {
 		return nil, err
 	}

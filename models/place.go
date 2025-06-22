@@ -49,11 +49,7 @@ type PlaceNotifications struct {
 	QuietHours      QuietHours `json:"quietHours" bson:"quietHours"`
 }
 
-type QuietHours struct {
-	Enabled   bool   `json:"enabled" bson:"enabled"`
-	StartTime string `json:"startTime" bson:"startTime"` // HH:MM format
-	EndTime   string `json:"endTime" bson:"endTime"`     // HH:MM format
-}
+
 
 type PlaceDetection struct {
 	IsAutoDetected bool      `json:"isAutoDetected" bson:"isAutoDetected"`

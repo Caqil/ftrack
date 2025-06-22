@@ -142,13 +142,13 @@ func (ss *SearchService) SearchInCircle(ctx context.Context, req models.SearchIn
 	// Get messages
 	skip := (req.Page - 1) * req.PageSize
 	opts := options.Find().
-		SetSort(bson.D{{"createdAt", -1}}).
+		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
 		SetSkip(int64(skip)).
 		SetLimit(int64(req.PageSize))
 
 	// Add text search score sorting if searching
 	if req.Query != "" {
-		opts.SetSort(bson.D{{"score", bson.M{"$meta": "textScore"}}, {"createdAt", -1}})
+		opts.SetSort(bson.D{{Key: "score", Value: bson.M{"$meta": "textScore"}}, {Key: "createdAt", Value: -1}})
 	}
 
 	cursor, err := ss.messageCollection.Find(ctx, filter, opts)
@@ -275,8 +275,8 @@ func (ss *SearchService) SearchMentions(ctx context.Context, userID string, req 
 		if user.FirstName != "" {
 			mentionPatterns = append(mentionPatterns, "@"+user.FirstName)
 		}
-		if user.Username != "" {
-			mentionPatterns = append(mentionPatterns, "@"+user.Username)
+		if user.FirstName != "" {
+			mentionPatterns = append(mentionPatterns, "@"+user.FirstName)
 		}
 	}
 

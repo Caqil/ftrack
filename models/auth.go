@@ -47,9 +47,9 @@ type ChangePasswordRequest struct {
 }
 
 type VerifyEmailRequest struct {
-	Token string `json:"token" validate:"required"`
+	EmailAddress     string `json:"email_address"`
+	VerificationCode string `json:"verification_code"`
 }
-
 type Setup2FARequest struct {
 	Password string `json:"password" validate:"required"`
 }
@@ -261,7 +261,6 @@ type LoginAttempt struct {
 	CreatedAt  time.Time          `json:"createdAt" bson:"createdAt"`
 }
 
-
 // ============== API KEY MANAGEMENT ==============
 
 type APIKey struct {
@@ -311,8 +310,8 @@ const (
 	EventAccountUnlocked    = "account_unlocked"
 
 	// Security severity levels
-	SeverityInfo     = "info"
-	SeverityWarning  = "warning"
+	SeverityInfo    = "info"
+	SeverityWarning = "warning"
 
 	// Device types
 	DeviceTypeIOS     = "ios"

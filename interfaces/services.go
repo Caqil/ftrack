@@ -51,11 +51,3 @@ type SMSService interface {
 	SendSMS(ctx context.Context, phone, message string) error
 	// Add other SMS methods you need
 }
-type EmailService interface {
-	SendEmail() error
-	SendVerificationEmail(email, firstName, token string) error
-	SendPasswordResetEmail(email, firstName, token string) error
-	SendWelcomeEmail(email, firstName string) error
-	Send2FADisabledEmail(email, firstName string) error
-	SendPasswordChangedEmail(email, firstName string) error
-}

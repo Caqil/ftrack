@@ -954,14 +954,12 @@ func (mr *MessageRepository) GetMessageActivity(ctx context.Context, circleIDs [
 			"day":   bson.M{"$dayOfMonth": "$createdAt"},
 			"hour":  bson.M{"$hour": "$createdAt"},
 		}
-		dateFormat = "%Y-%m-%d %H:00:00"
 	} else {
 		groupBy = bson.M{
 			"year":  bson.M{"$year": "$createdAt"},
 			"month": bson.M{"$month": "$createdAt"},
 			"day":   bson.M{"$dayOfMonth": "$createdAt"},
 		}
-		dateFormat = "%Y-%m-%d"
 	}
 
 	pipeline := mongo.Pipeline{

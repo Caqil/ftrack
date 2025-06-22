@@ -106,7 +106,7 @@ func (sr *ScheduleRepository) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
-	if result.DeletedCount == 0 {
+	if result.MatchedCount == 0 {
 		return errors.New("scheduled message not found")
 	}
 
@@ -137,7 +137,7 @@ func (sr *ScheduleRepository) GetUserScheduledMessages(ctx context.Context, user
 	// Get scheduled messages
 	skip := (req.Page - 1) * req.PageSize
 	opts := options.Find().
-		SetSort(bson.D{{"scheduledAt", 1}}).
+		SetSort(bson.D{{Key: "scheduledAt", Value: 1}}).
 		SetSkip(int64(skip)).
 		SetLimit(int64(req.PageSize))
 
@@ -247,7 +247,7 @@ func (sr *ScheduleRepository) GetByCircle(ctx context.Context, circleID string, 
 		filter["status"] = status
 	}
 
-	opts := options.Find().SetSort(bson.D{{"scheduledAt", 1}})
+	opts := options.Find().SetSort(bson.D{{Key: "scheduledAt", Value: 1}})
 
 	cursor, err := sr.collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -295,7 +295,7 @@ func (sr *ScheduleRepository) GetUpcomingMessages(ctx context.Context, userID st
 		"isDeleted":   bson.M{"$ne": true},
 	}
 
-	opts := options.Find().SetSort(bson.D{{"scheduledAt", 1}})
+	opts := options.Find().SetSort(bson.D{{Key: "scheduledAt", Value: 1}})
 
 	cursor, err := sr.collection.Find(ctx, filter, opts)
 	if err != nil {

@@ -56,6 +56,11 @@ type User struct {
 	// Timestamps
 	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
+
+	Role          string     `json:"role" bson:"role"`                                   // user, moderator, admin, superadmin
+	Permissions   []string   `json:"permissions,omitempty" bson:"permissions,omitempty"` // specific permissions
+	IsAdmin       bool       `json:"isAdmin" bson:"isAdmin"`                             // quick admin check
+	DeactivatedAt *time.Time `json:"deactivatedAt,omitempty" bson:"deactivatedAt,omitempty"`
 }
 
 type UserPreferences struct {
